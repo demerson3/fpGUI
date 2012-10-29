@@ -66,6 +66,8 @@ type
   TfpgStateImageClickedEvent = procedure(Sender: TObject; ANode: TfpgTreeNode) of object;
 
 
+  { TfpgTreeNode }
+
   TfpgTreeNode = class(TObject)
   private
     FCollapsed: boolean;
@@ -99,6 +101,7 @@ type
     procedure   SetStateImageIndex(const AValue: integer);
   public
     constructor Create;
+    constructor Create (pass_tree : TfpgTreeView);
     destructor  Destroy; override;
     // node related
     function    AppendText(AText: TfpgString): TfpgTreeNode;
@@ -133,6 +136,7 @@ type
     property    Parent: TfpgTreeNode read FParent write SetParent;
     property    Prev: TfpgTreeNode read FPrev write FPrev;
     property    Text: TfpgString read FText write SetText;
+    property    MyTree: TfpgTreeView read FTree;
     { determines the + or - image in the treeview }
     property    HasChildren: Boolean read FHasChildren write SetHasChildren;
     // color settings
@@ -408,6 +412,12 @@ begin
   FTextColor          := clUnset;
   FInactSelColor      := clUnset;
   FInactSelTextColor  := clUnset;
+end;
+
+constructor TfpgTreeNode.Create (pass_tree: TfpgTreeView);
+begin
+  Create;
+  FTree := pass_tree;
 end;
 
 destructor TfpgTreeNode.Destroy;
