@@ -1542,6 +1542,7 @@ begin
 
   Canvas.ClearClipRect;
   Canvas.Clear(BackgroundColor);
+  Canvas.SetFont(FFont);
 
   // Limit painting in the UI Designer
   if csDesigning in ComponentState then
