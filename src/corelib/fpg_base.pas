@@ -22,6 +22,9 @@ unit fpg_base;
 // To enable the AggPas powered Canvas
 {.$define AGGCanvas}
 
+// For debug use only
+{.$define GDEBUG}
+
 interface
 
 uses
@@ -116,6 +119,7 @@ const
   FPGM_FREEME      = 19;
   FPGM_DROPENTER   = 20;
   FPGM_DROPEXIT    = 21;
+  FPGM_HSCROLL      = 22;
   FPGM_USER        = 50000;
   FPGM_KILLME      = MaxInt;
 
@@ -778,6 +782,9 @@ uses
   fpg_form,  // needed for fpgApplication.CreateForms()
   typinfo,
   process,
+  {$IFDEF GDEBUG}
+  dbugintf,
+  {$ENDIF}
   dateutils;
 
 
@@ -2553,7 +2560,9 @@ begin
         p.CommandLine := GetHelpViewer + ' ' + HelpFile
       else
         p.CommandLine := GetHelpViewer + ' ' + HelpFile + ' -n ' + IntToStr(AHelpContext);
-//writeln('DEBUG:  TfpgApplicationBase.ContextHelp > ', p.CommandLine);
+        {$ifdef GDEBUG}
+        senddebug(p.CommandLine);
+        {$endif}
     end
     else
       p.CommandLine := GetHelpViewer;
@@ -2576,7 +2585,9 @@ begin
     if fpgFileExists(HelpFile) then
     begin
       p.CommandLine := GetHelpViewer + ' ' + HelpFile + ' -s ' + AHelpKeyword;
-//writeln('DEBUG:  TfpgApplicationBase.ContextHelp > ', p.CommandLine);
+      {$ifdef GDEBUG}
+      senddebug(p.CommandLine);
+      {$endif}
     end
     else
       p.CommandLine := GetHelpViewer;
