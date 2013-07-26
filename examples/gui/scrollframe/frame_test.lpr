@@ -97,6 +97,7 @@ var
   outer_frame: TfpgScrollFrame;
 
 begin
+  randomize;
   fpgApplication.Initialize;
   form := TfpgForm.Create(nil);
   form.SetPosition(0,0,380,360);
