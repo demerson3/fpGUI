@@ -32,6 +32,8 @@ begin
             b := TfpgButton.Create(f);
             with b do begin
               SetPosition(20+i*105, 50+j*30, 100, 25);
+              if (i=2) and (j=2) then
+                SetPosition(6000, 6000, 100, 25);
               name := 'button' + inttostr(ij);
               Text := 'Button ' + inttostr(ij+1);
               FontDesc := '#Label1';
