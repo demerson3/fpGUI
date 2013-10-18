@@ -25,7 +25,7 @@ function bitlen_to_bytelen_32bit (x : longword) : longword;
 function bitlen_to_bytelen_64bit (x : longword) : longword;
 
 // dump the contents so we can examine them in the console
-procedure dump_bits (rb : rendering_buffer_ptr);
+procedure dump_bits (rb : rendering_buffer_ptr; c0 : char = '+'; c1 : char = '#');
 
 
 
@@ -626,7 +626,7 @@ procedure pixfmt_bitbuf (var pixf : pixel_formats; rb : rendering_buffer_ptr);
     
   end;
 
-procedure dump_bits (rb : rendering_buffer_ptr);
+procedure dump_bits (rb : rendering_buffer_ptr; c0 : char = '+'; c1 : char = '#');
   var
     i,j : longint;
   begin with rb^ do begin
@@ -634,8 +634,8 @@ procedure dump_bits (rb : rendering_buffer_ptr);
     for j := 0 to _height-1 do begin
       for i := 0 to _width-1 do begin
         if bitbuf_get_bool(rb, i, j)
-          then write ('#')
-          else write ('+');
+          then write (c1)
+          else write (c0);
         if (i mod 8 = 7) then write (' ');
         end;
       writeln;
