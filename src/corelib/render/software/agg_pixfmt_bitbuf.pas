@@ -13,10 +13,21 @@ uses
   agg_color,
   agg_rendering_buffer;
 
-const
-  min_true_val = 20; // max is 255, so less than 10% is treated as transparent
+var
+  // minimum alpha value needed to mask a pixel. Perhaps it should be 1
+  min_value_to_add_mask : byte = 51;
+  // for bitbuf_pixel, what aggclr corresponds to true/false?
+  bb_colors : array [false..true] of aggclr;
 
-procedure pixfmt_bitbuf (var pixf : pixel_formats; rb : rendering_buffer_ptr);
+// When used as a transparency mask, whatever we are draw only adds to the mask.
+// So even if a "copy" pixfmt func gets called, it will blend
+procedure pixfmt_bitbuf_noerase (var pixf : pixel_formats; rb : rendering_buffer_ptr);
+
+// However, this pixfmt does a straight copy, which may set 1 bits to 0
+procedure pixfmt_bitbuf_copyerase (var pixf : pixel_formats; rb : rendering_buffer_ptr);
+
+// I can't imagine what it would mean to erase on blend, so I'm not implementing it
+
 
 // calculate how long a row should be in bytes
 function bitlen_to_bytelen_8bit  (x : longword) : longword;
@@ -35,8 +46,6 @@ implementation
 type
   byte_arr = array of byte;
 
-var
-  bb_colors : array [false..true] of aggclr;
 
 const
   {$ifdef ENDIAN_LITTLE}
@@ -54,8 +63,6 @@ const
     (bit0,  bit1,  bit2,  bit3,  bit4,  bit5,  bit6,  bit7);
   inv_bits : array[0..7] of byte =
     (ibit0, ibit1, ibit2, ibit3, ibit4, ibit5, ibit6, ibit7);
-
-  fillval : array[boolean] of byte = (0, 255);
 
   bytes : array [0..7,0..7] of byte =
     ((bit0, bit0 or bit1, bit0 or bit1 or bit2, bit0 or bit1 or bit2 or bit3,
@@ -180,18 +187,28 @@ function bitlen_to_bytelen_64bit (x : longword) : longword;
     result := ((x + 63) div 64) shl 3;
   end;
 
+function byte_diff_from_left_right (x1, x2 : unsigned) : unsigned;
+  begin
+    result := (x2 shr 3) - (x1 shr 3);
+  end;
+
+function byte_diff_from_left_length (x, len : unsigned) : unsigned;
+  begin
+    result := byte_diff_from_left_right (x, x + len -1);
+  end;
+
 { functions that work on bits one at a time }
 
 // Get a byte with this bit set to 1, e.g. x=5, result = 00000100
 function focus_bit (x : longword) : byte; inline;
   begin
-    result := bits[x mod 8];
+    result := bits[x and 7];  // equivalent to x mod 8
   end;
 
 // Get a byte with this bit set to 0, e.g. x=5, result = 11111011
 function focus_inv_bit (x : longword) : byte; inline;
   begin
-    result := inv_bits[x mod 8];
+    result := inv_bits[x and 7];  // equivalent to x mod 8
   end;
 
 // get a pointer to the byte that contains the wanted bit x,y
@@ -207,24 +224,10 @@ function pbyte_get_bool (p : pbyte; x : int) : boolean; inline;
     result := (p^ and focus_bit(x)) >0;
   end;
 
-// as above, but return a number rather than a boolean
-function pbyte_get_bit  (p : pbyte; x : int) : byte; inline;
-  begin
-    if pbyte_get_bool (p, x)
-      then result := 1
-      else result := 0;
-  end;
-
 // as above, with a rendering_buffer param
 function bitbuf_get_bool (rb : rendering_buffer_ptr; x, y : int) : boolean;
   begin
     result := (pbyte_of_bit(rb,x,y)^ and focus_bit(x)) >0;
-  end;
-
-// as above
-function bitbuf_get_bit  (rb : rendering_buffer_ptr; x, y : int) : byte;
-  begin
-    result := pbyte_get_bit (pbyte_of_bit(rb,x,y), x);
   end;
 
 // set the value of bit x within the byte. x mod 8 is performed.
@@ -243,387 +246,22 @@ procedure bitbuf_set_bool (rb : rendering_buffer_ptr; x, y : int; b : boolean);
 
 { functions that work with groups of bits }
 
-procedure dump_ba (ba : byte_arr);
+procedure dump_ba (ba : byte_arr; c0 : char = '0'; c1 : char = '1');
   var
     i : longint;
     p : pbyte;
   begin
     p := @ba[0];
     for i := 0 to length(ba) shl 3 -1 do begin
-      write (pbyte_get_bit(p, i));
-      if (i mod 8 = 7) then begin
+      if pbyte_get_bool (p, i)
+        then write (c1)
+        else write (c0);
+      if (i and 7 = 7) then begin // x and 7 is equivalent to x mod 8
         write (' ');
         inc(p);
         end;
       end;
     writeln ('=');
-  end;
-
-// fill a column within a bit buffer with a particular byte - true/1/or version
-procedure fill_col_1 (p_top, p_bot : pbyte; the_byte : byte; pass_stride: int);
-  var
-    pp : pbyte;
-  begin
-    pp := p_top;
-    while pp<=p_bot do begin
-      pp^ := pp^ or the_byte;
-      inc(pp, pass_stride);
-      end;
-  end;
-
-// fill a column within a bit buffer with a particular byte - false/0/and version
-procedure fill_col_0 (p_top, p_bot : pbyte; the_byte : byte; pass_stride: int);
-  var
-    pp : pbyte;
-  begin
-    pp := p_top;
-    while pp<=p_bot do begin
-      pp^ := pp^ and the_byte;
-      inc(pp, pass_stride);
-      end;
-  end;
-
-// each bit (0 or 1) is shown as a letter
-// abcdefgh ijklmnop pad_left 3
-// 000abcde fghijklm nop00000
-// first byte: abcde goes on the right, left is nil
-// second byte: ijklm goes on right, fgh goes on left
-// third byte: right is nil, nop goes on left
-// ANOTHER EXAMPLE - this time result has same num bytes as ba_in
-// abcdefgh ijklmnop qrs00000 pad_left 3
-// 000abcde fghijklm nopqrs00
-function pad_bit_arr (ba_in : byte_arr; old_len, pad_amount : int) : byte_arr;
-  var
-    new_high_bit : int;
-    i : longint;
-    l_shift, r_shift : byte;
-    left_p, right_p, new_p : pbyte;
-  begin
-    pad_amount := pad_amount mod 8;
-    //writeln ('pad ', pad_amount);
-    //dump_ba (ba_in);
-    if pad_amount=0 then begin
-      result := ba_in;
-      //dump_ba (result);
-      exit;
-      end;
-    new_high_bit := (old_len-1) + pad_amount;
-    setlength (result, bitlen_to_bytelen_8bit(new_high_bit+1));
-    r_shift := pad_amount and 7;
-    l_shift := 8-r_shift;
-    // first byte:
-    new_p := @result[0];
-    right_p := @ba_in[0];
-    new_p^ := right_p^ shr r_shift;
-    // second byte through last original byte:
-    for i := 1 to (old_len-1) shr 3 do begin
-      left_p := right_p;
-      inc (right_p);
-      inc (new_p);
-      new_p^ := (right_p^ shr r_shift) or byte(left_p^ shl l_shift);
-      end;
-    // last new byte, if needed:
-    if (length(result) > length(ba_in)) then begin
-      left_p := right_p;
-      inc (new_p);
-      new_p^ := byte (left_p^ shl l_shift);
-      end;
-    //dump_ba (result);
-  end;
-
-{ functions to convert between aggclr and bit (boolean) }
-
-function bool_from_color (c : aggclr_ptr) : boolean; //inline;
-  begin
-    result := (c^.a >= min_true_val)
-  end;
-
-function bool_from_color_and_cover (c : aggclr_ptr; cover : byte) : boolean; //inline;
-  begin
-    result := ( (c^.a+1) * (cover+1) -1 ) shr 8 > min_true_val;
-  end;
-
-function bitbytes_from_colors (colors : aggclr_ptr; len : unsigned) : byte_arr;
-  var
-    i : int;
-    p : pbyte;
-  begin
-    setlength (result, bitlen_to_bytelen_8bit(len));
-    p := @result[0];
-    i := 0;
-    while i<len do begin
-      if bool_from_color (colors)
-        then p^ := p^ or focus_bit(i);
-      inc(i);
-      inc (colors, sizeof (aggclr));
-      if (i mod 8) = 0 then inc(p);
-      end;
-  end;
-
-function bitbytes_from_1color_and_covers (c : aggclr_ptr; covers : int8u_ptr; len : unsigned) : byte_arr;
-  var
-    i, nlen : int;
-    p : pbyte;
-  begin
-    nlen := bitlen_to_bytelen_8bit(len);
-    setlength (result, nlen);
-    p := @result[0];
-    i := 0;
-    while i<len do begin
-      if bool_from_color_and_cover (c, covers^)
-        then p^ := p^ or focus_bit(i);
-      inc(i);
-      inc (covers);
-      if (i mod 8) = 0 then inc(p);
-      end;
-  end;
-
-function bitbytes_from_colors_and_covers (colors : aggclr_ptr; covers : int8u_ptr; len : unsigned) : byte_arr;
-  var
-    i : int;
-    p : pbyte;
-  begin
-    setlength (result, bitlen_to_bytelen_8bit(len));
-    p := @result[0];
-    i := 0;
-    while i<len do begin
-      if bool_from_color_and_cover (colors, covers^)
-        then p^ := p^ or focus_bit(i);
-      inc(i);
-      inc (colors, sizeof (aggclr));
-      inc (covers);
-      if (i mod 8) = 0 then inc(p);
-      end;
-  end;
-
-{ pixel_format functions }
-
-function bitbuf_pixel (this : pixel_formats_ptr; x, y : int ) : aggclr;
-  begin
-    result := bb_colors[bitbuf_get_bool (this^.m_rbuf, x, y)];
-  end;
-
-// function bitbuf_row   (this : pixel_formats_ptr; x, y : int ) : row_data_type;
-
-procedure bitbuf_copy_pixel  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
-  begin
-    bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color (c));
-  end;
-
-procedure bitbuf_blend_pixel (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr; cover : int8u );
-  begin
-    if bool_from_color(c)
-      then bitbuf_set_bool (this^.m_rbuf, x, y, true);
-  end;
-
-procedure bitbuf_copy_hline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
-  var
-    x2, fill_count : int;
-    p, q : pbyte;
-    bv : boolean;
-  begin
-    if len=0 then exit;
-    bv := bool_from_color(c);
-    p := pbyte_of_bit (this^.m_rbuf, x, y);
-    if len=1 then begin
-      pbyte_set_bool(p, x, bv);
-      exit;
-      end;
-    x2 := x+len-1;
-    q := pbyte_of_bit (this^.m_rbuf, x2, y);
-    if p=q then
-      if bv
-        then p^ := p^ or bytes[x mod 8, x2 mod 8]  // 0s,1s,0s eg  00111000
-        else p^ := p^ and inv_bytes[x mod 8, x2 mod 8]  // inv eg 11000111
-    else begin // q>p
-      // first get the mixed spots
-      if bv then begin
-        p^ := p^ or bytes[x mod 8, 7]; // 0s then 1s eg 00011111 or 00000001
-        q^ := q^ or bytes[0, x2 mod 8]; // 1s then 0s eg 11000000 or 11111100
-        end
-      else {not bv} begin
-        p^ := p^ and inv_bytes[x mod 8, 7];  // inv of above p e.g. 11100000
-        q^ := q^ and inv_bytes[0, x2 mod 8];
-        end;
-      inc(p);
-      // now fill the area in-between
-      if (p<q) then begin
-        fill_count := (x2 shr 3) - (x shr 3) -1;
-        fillbyte (p^, fill_count, fillval[bv]);
-        end;
-      end
-  end;
-
-procedure bitbuf_copy_vline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
-  var
-    y2, stride : int;
-    p, q : pbyte;
-    bv : boolean;
-  begin
-    if len=0 then exit;
-    bv := bool_from_color(c);
-    p := pbyte_of_bit (this^.m_rbuf, x, y);
-    if len=1 then begin
-      pbyte_set_bool(p, x, bv);
-      exit;
-      end;
-    y2 := y+len-1;
-    q := pbyte_of_bit (this^.m_rbuf, x, y2);
-    if bv
-      then fill_col_1 (p, q, focus_bit(x),     this^.m_rbuf^._stride)
-      else fill_col_0 (p, q, focus_inv_bit(x), this^.m_rbuf^._stride);
-  end;
-
-procedure bitbuf_blend_hline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
-  begin
-    if bool_from_color(c)
-      then bitbuf_copy_hline (this, x, y, len, c);
-  end;
-
-procedure bitbuf_blend_vline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
-  begin
-    if bool_from_color(c)
-      then bitbuf_copy_vline (this, x, y, len, c);
-  end;
-
-procedure bitbuf_blend_solid_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; covers : int8u_ptr );
-  var
-    bb : byte_arr;
-    pa, pb, palast, pblast : pbyte;
-    i : longint;
-  begin
-    if len=0 then exit;
-    if len=1 then begin
-      if bool_from_color(c) then bitbuf_set_bool (this^.m_rbuf, x, y, true);
-      exit;
-      end;
-    pa     := pbyte_of_bit (this^.m_rbuf, x, y);
-    palast := pbyte_of_bit (this^.m_rbuf, x+len-1, y);
-    bb := bitbytes_from_1color_and_covers (c, covers, len);
-    bb := pad_bit_arr (bb, len, x);
-    pb     := @bb[0];
-    pblast := @bb[high(bb)];
-    while (pa<=palast) and (pb<=pblast) do begin
-      pa^ := pa^ or pb^;
-      inc(pa);
-      inc(pb);
-      end;
-  end;
-
-procedure bitbuf_blend_solid_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; covers : int8u_ptr );
-  var
-    p, q : pbyte;
-  begin
-    p := pbyte_of_bit (this^.m_rbuf, x, y);
-    q := pbyte_of_bit (this^.m_rbuf, x, y+len-1);
-    while p<=q do begin
-      if bool_from_color_and_cover (c, covers^)
-        then pbyte_set_bool(p, x, true);
-      inc (c, sizeof(aggclr));
-      inc (covers);
-      end;
-  end;
-
-//procedure bitbuf_copy_color_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr);
-//  var
-//    bb : byte_arr;
-//  begin
-//    if len=0 then exit;
-//    if len=1 then begin
-//      bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color(c));
-//      exit;
-//      end;
-//    bb := bitbytes_from_colors (colors, len);
-//    bb := pad_bit_arr (bb, len, x);
-//    
-//  end;
-
-(*
-procedure bitbuf_blender   (this : pixel_formats_ptr; op : unsigned; p : int8u_ptr; cr, cg, cb, ca, cover : unsigned );
-procedure bitbuf_blend_pix (this : pixel_formats_ptr; p : int8u_ptr; cr, cg, cb, alpha, cover : unsigned );
-
-
-procedure bitbuf_copy_color_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr );
-
-procedure bitbuf_blend_color_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr; covers : int8u_ptr; cover : int8u );
-procedure bitbuf_blend_color_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr; covers : int8u_ptr; cover : int8u );
-
-procedure bitbuf_copy_from  (this : pixel_formats_ptr; from : rendering_buffer_ptr; xdst, ydst, xsrc, ysrc : int; len : unsigned );
-procedure bitbuf_blend_from (this : pixel_formats_ptr; from : pixel_formats_ptr; psrc_ : int8u_ptr; xdst, ydst, xsrc, ysrc : int; len : unsigned; cover : int8u );
-
-procedure bitbuf_blend_from_color (this : pixel_formats_ptr; from : pixel_formats_ptr; color : aggclr_ptr; xdst, ydst, xsrc, ysrc : int; len : unsigned; cover : int8u );
-procedure bitbuf_blend_from_lut   (this : pixel_formats_ptr; from : pixel_formats_ptr; color_lut : aggclr_ptr; xdst, ydst, xsrc, ysrc : int; len : unsigned; cover : int8u );
-
-procedure bitbuf_apply_gamma    (this : pixel_formats_ptr; p : int8u_ptr );
-procedure bitbuf_for_each_pixel (this : pixel_formats_ptr; f : func_apply_gamma );
-
-
-blender : func_blender;
-
-copy_hline : func_copy_hline;
-copy_vline : func_copy_vline;
-
-blend_hline : func_blend_hline;
-blend_vline : func_blend_vline;
-
-blend_solid_hspan : func_blend_solid_hspan;
-blend_solid_vspan : func_blend_solid_vspan;
-
-copy_color_hspan : func_copy_color_hspan;
-copy_color_vspan : func_copy_color_vspan;
-
-blend_color_hspan : func_blend_color_hspan;
-blend_color_vspan : func_blend_color_vspan;
-
-copy_from  : func_copy_from;
-blend_from : func_blend_from;
-
-blend_from_color : func_blend_from_color;
-blend_from_lut   : func_blend_from_lut;
-
-for_each_pixel  : func_for_each_pixel;
-gamma_dir_apply ,
-gamma_inv_apply : func_apply_gamma;
-
-pixel_premultiply ,
-pixel_demultiply  : func_apply_gamma;
-
-*)
-
-procedure pixfmt_bitbuf (var pixf : pixel_formats; rb : rendering_buffer_ptr);
-  begin
-    pixf.Construct(rb, 1, 0);
-    pixf.m_pix_width:=1;
-
-    pixf.copy_pixel  := @bitbuf_copy_pixel;
-    pixf.blend_pixel := @bitbuf_blend_pixel;
-
-    pixf.pixel:= @bitbuf_pixel;
-    //pixf.row  := @bitbuf_row;
-
-    pixf.copy_hline  := @bitbuf_copy_hline;
-    pixf.copy_vline  := @bitbuf_copy_vline;
-    pixf.blend_hline := @bitbuf_blend_hline;
-    pixf.blend_vline := @bitbuf_blend_vline;
-
-    pixf.blend_solid_hspan  := @bitbuf_blend_solid_hspan;
-    pixf.blend_solid_vspan  := @bitbuf_blend_solid_vspan;
- 
-    //pixf.copy_color_hspan:=@bitbuf_copy_color_hspan;
-    //pixf.copy_color_vspan:=@bitbuf_copy_color_vspan;
-    //pixf.blend_color_hspan:=@gray8_blend_color_hspan;
-    //pixf.blend_color_vspan:=@gray8_blend_color_vspan;
-
-    //pixf.copy_from :=@gray8_copy_from;
-    //pixf.blend_from:=NIL; // not defined in agg_pixfmt_gray.h
-    //
-    //pixf.blend_from_color:=@gray8_blend_from_color;
-    //pixf.blend_from_lut  :=@gray8_blend_from_lut;
-    //
-    //pixf.for_each_pixel :=@gray_for_each_pixel;
-    //pixf.gamma_dir_apply:=@gray_gamma_dir_apply;
-    //pixf.gamma_inv_apply:=@gray_gamma_inv_apply;
-    
   end;
 
 procedure dump_bits (rb : rendering_buffer_ptr; c0 : char = '+'; c1 : char = '#');
@@ -636,13 +274,580 @@ procedure dump_bits (rb : rendering_buffer_ptr; c0 : char = '+'; c1 : char = '#'
         if bitbuf_get_bool(rb, i, j)
           then write (c1)
           else write (c0);
-        if (i mod 8 = 7) then write (' ');
+        if (i and 7 = 7) then write (' ');
         end;
       writeln;
       //if (j mod 4 = 3) then writeln;
       end;
     writeln;
   end; end;
+
+// fill a column within a bit buffer with a particular byte - true/1/or version
+procedure fill_col_or (p_top, p_bot : pbyte; the_byte : byte; pass_stride: int);
+  begin
+    while p_top<=p_bot do begin
+      p_top^ := p_top^ or the_byte;
+      inc(p_top, pass_stride);
+      end;
+  end;
+
+// fill a column within a bit buffer with a particular byte - false/0/and version
+procedure fill_col_and (p_top, p_bot : pbyte; the_byte : byte; pass_stride: int);
+  begin
+    while p_top<=p_bot do begin
+      p_top^ := p_top^ and the_byte;
+      inc(p_top, pass_stride);
+      end;
+  end;
+
+procedure copy_vline_using_bool (this : pixel_formats_ptr; x, y : int; len : unsigned; bv : boolean);
+  // overwrite every pixel in the range with color c
+  var
+    p, q : pbyte;
+  begin
+    if len=0 then exit;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    if len=1 then begin
+      pbyte_set_bool(p, x, bv);
+      exit;
+      end;
+    q := pbyte_of_bit (this^.m_rbuf, x, y+len-1);
+    if bv
+      then fill_col_or  (p, q, focus_bit(x),     this^.m_rbuf^._stride)
+      else fill_col_and (p, q, focus_inv_bit(x), this^.m_rbuf^._stride);
+  end;
+
+procedure fill_row_1 (p : pbyte; x, len: unsigned);
+  // left_x lives in byte p, so definitely left_x < 7, and right_x > left_x
+  var
+    q : pbyte;
+    byte_diff : longint;
+    x2 : unsigned;
+  begin
+    x2 := x + len -1;
+    byte_diff := byte_diff_from_left_right (x, x2);
+    if byte_diff=0 then begin
+      p^ := p^ or bytes[x and 7, x2 and 7];  // 0s,1s,0s eg  00111000
+      exit;
+      end;
+    q := p + byte_diff;
+    p^ := p^ or bytes[x and 7, 7];  // 0s then 1s eg 00011111 or 00000001
+    q^ := q^ or bytes[0, x2 and 7]; // 1s then 0s eg 11000000 or 11111100
+    // if p+1=q then there is still no in-between area to fill
+    if byte_diff>1 then begin
+      inc(p);
+      fillbyte (p^, byte_diff-1, 255);
+      end;
+  end;
+
+procedure fill_row_0 (p : pbyte; x, len: unsigned);
+  // left_x lives in byte p, so definitely left_x < 7, and right_x > left_x
+  var
+    q : pbyte;
+    byte_diff : longint;
+    x2 : unsigned;
+  begin
+    x2 := x + len -1;
+    byte_diff := byte_diff_from_left_right (x, x2);
+    if byte_diff=0 then begin
+      p^ := p^ and inv_bytes[x and 7, x2 and 7];  // inv eg 11000111
+      exit;
+      end;
+    q := p + byte_diff;
+    p^ := p^ and inv_bytes[x and 7, 7];  // 0s then 1s eg 00011111 or 00000001
+    q^ := q^ and inv_bytes[0, x2 and 7]; // 1s then 0s eg 11000000 or 11111100
+    // if p+1=q then there is still no in-between area to fill
+    if byte_diff>1 then begin
+      inc(p);
+      fillbyte (p^, byte_diff-1, 0);
+      end;
+  end;
+
+procedure copy_hline_using_bool (this : pixel_formats_ptr; x, y : int; len : unsigned; bv : boolean);
+  // overwrite every pixel in the range with color c
+  var
+    p : pbyte;
+  begin
+    if len=0 then exit;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    if len=1 then
+      pbyte_set_bool (p, x, bv)
+    else if bv then
+      fill_row_1 (p, x, len)
+    else
+      fill_row_0 (p, x, len);
+  end;
+
+{
+// each bit (0 or 1) is shown as a letter
+// abcdefgh ijklmnop pad_left 3
+// 000abcde fghijklm nop00000
+// first byte: abcde goes on the right, left is nil
+// second byte: ijklm goes on right, fgh goes on left
+// third byte: right is nil, nop goes on left
+// ANOTHER EXAMPLE - inverse, and result has same num bytes as ba_in
+// abcdefgh ijklmnop qrs00000 pad_left 3
+// 111abcde fghijklm nopqrs11
+function pad_bit_arr (ba_in : byte_arr; pass_bit_len, pad_amount : unsigned;
+    inverse : boolean = false) : byte_arr;
+  // create a new bit_arr with 0-7 or more 0's or 1's on the left (and right)
+  var
+    new_bit_len, old_byte_len, new_byte_len, padded_bytes : unsigned;
+    i : longint;
+    l_shift, r_shift : byte;
+    left_p, right_p, new_p : pbyte;
+  begin
+    //writeln ('pad ', pad_amount);
+    //dump_ba (ba_in);
+    old_byte_len := bitlen_to_bytelen_8bit(pass_bit_len);
+    if inverse then begin
+      // using setlength makes a copy of ba_in so we don't modify the passed-by-ref var
+      setlength (ba_in, old_byte_len);
+      for i := 0 to old_byte_len-1 do
+        ba_in[i] := 255 xor ba_in[i];
+      end;
+    if pad_amount = 0 then begin
+      result := ba_in;
+      //dump_ba (result);
+      exit;
+      end;
+    new_bit_len := pass_bit_len + pad_amount;
+    new_byte_len := bitlen_to_bytelen_8bit(new_bit_len);
+    padded_bytes := pad_amount shr 3;
+    setlength (result, new_byte_len);
+    if inverse then fillbyte (result[0], new_byte_len, 255);
+    new_p := @result[padded_bytes]; // first byte that will accept ba_in data
+    if (pad_amount and 7 = 0) then begin // no bitwise padding needed
+      move (ba_in[0], new_p^, old_byte_len);
+      //dump_ba (result);
+      exit;
+      end;
+    r_shift := pad_amount and 7;
+    l_shift := 8-r_shift;
+    // first byte: we want 000abcde
+    right_p := @ba_in[0];
+    new_p^ := right_p^ shr r_shift;
+    // second byte through last original byte: fgh-ijklm (fgh comes from old first byte)
+    for i := 1 to (pass_bit_len-1) shr 3 do begin
+      left_p := right_p;
+      inc (right_p);
+      inc (new_p);
+      new_p^ := (right_p^ shr r_shift) or (left_p^ shl l_shift) and 255;
+      end;
+    // last new byte, if needed: we want nop00000
+    if (new_byte_len > old_byte_len + padded_bytes) then begin
+      left_p := right_p;
+      inc (new_p);
+      new_p^ := (left_p^ shl l_shift) and 255;
+      end;
+    if inverse then
+      for i := 0 to new_byte_len-1 do
+        result[i] := 255 xor result[i];
+    //dump_ba (result);
+  end;
+}
+
+{ functions to convert between aggclr and bit (boolean) }
+
+function bool_from_one_alpha (alpha : byte) : boolean; inline;
+  begin
+    result := alpha >= min_value_to_add_mask;
+  end;
+
+function bool_from_color (c : aggclr_ptr) : boolean; inline;
+  begin
+    result := bool_from_one_alpha (c^.a);
+  end;
+
+function bool_from_two_alphas (a, b : byte) : boolean; inline;
+  begin
+    result := bool_from_one_alpha ( ( (a+1) * (b+1) -1 ) shr 8);
+    // the above was tested and works well: ( (a+1)*(b+1) -1 ) shr 8
+    // aggpas ( a*(b+1) ) shr 8 is very skeptical i.e. (1,254) gives 0
+  end;
+
+function bool_from_color_and_cover (c : aggclr_ptr; cover : byte) : boolean; inline;
+  begin
+    result := bool_from_two_alphas (c^.a, cover);
+  end;
+
+function bitbytes_from_1color_and_covers (c : aggclr_ptr; covers : int8u_ptr;
+    len : unsigned; pad : unsigned = 0) : byte_arr;
+  var
+    i : int;
+    p : pbyte;
+    alpha : byte;
+  begin
+    inc (len, pad);
+    setlength (result, bitlen_to_bytelen_8bit(len));
+    p := @result[pad shr 3];
+    alpha := c^.a;
+    for i := pad to len-1 do begin
+      if bool_from_two_alphas (alpha, covers^)
+        then p^ := p^ or focus_bit(i);
+      inc (covers);
+      if i and 7 = 0 then inc(p);
+      end;
+  end;
+
+function bitbytes_from_colors (colors : aggclr_ptr;
+    len : unsigned; pad : unsigned = 0) : byte_arr;
+  var
+    i : int;
+    p : pbyte;
+  begin
+    inc (len, pad);
+    setlength (result, bitlen_to_bytelen_8bit(len));
+    p := @result[pad shr 3];
+    for i := pad to len-1 do begin
+      if bool_from_color (colors)
+        then p^ := p^ or focus_bit(i);
+      inc (colors, sizeof (aggclr));
+      if i and 7 = 0 then inc(p);
+      end;
+  end;
+
+function bitbytes_from_colors_and_1cover (colors : aggclr_ptr; cover : int8u;
+    len : unsigned; pad : unsigned = 0) : byte_arr;
+  var
+    i : int;
+    p : pbyte;
+  begin
+    if cover = 255 then begin
+      result := bitbytes_from_colors (colors, len, pad);
+      exit;
+      end;
+    inc (len, pad);
+    setlength (result, bitlen_to_bytelen_8bit(len));
+    p := @result[pad shr 3];
+    for i := pad to len-1 do begin
+      if bool_from_color_and_cover (colors, cover)
+        then p^ := p^ or focus_bit(i);
+      inc (colors, sizeof (aggclr));
+      if i and 7 = 0 then inc(p);
+      end;
+  end;
+
+function bitbytes_from_colors_and_covers (colors : aggclr_ptr; covers : int8u_ptr;
+    len : unsigned; pad : unsigned = 0) : byte_arr;
+  var
+    i : int;
+    p : pbyte;
+  begin
+    inc (len, pad);
+    setlength (result, bitlen_to_bytelen_8bit(len));
+    p := @result[pad shr 3];
+    for i := pad to len-1 do begin
+      if bool_from_color_and_cover (colors, covers^)
+        then p^ := p^ or focus_bit(i);
+      inc (colors, sizeof (aggclr));
+      inc (covers);
+      if i and 7 = 0 then inc(p);
+      end;
+  end;
+
+procedure apply_bitbytes (this : pixel_formats_ptr; bb : byte_arr; x, y : int; len : unsigned);
+  var
+    pa, pb : pbyte;
+    byte_diff : unsigned;
+    i : longint;
+  begin
+    pa := pbyte_of_bit (this^.m_rbuf, x, y);
+    pb := @bb[0];
+    byte_diff := byte_diff_from_left_length (x, len);
+    for i := 0 to byte_diff do begin
+      pa^ := pa^ or pb^;
+      inc(pa);
+      inc(pb);
+      end;
+  end;
+
+{ pixel_format functions }
+
+function bitbuf_pixel (this : pixel_formats_ptr; x, y : int ) : aggclr;
+  // return the "color" of one pixel, hopefully this never gets used
+  begin
+    result := bb_colors[bitbuf_get_bool (this^.m_rbuf, x, y)];
+  end;
+
+// function bitbuf_row   (this : pixel_formats_ptr; x, y : int ) : row_data_type;
+
+procedure bitbuf_copy_pixel  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
+  // overwrite this pixel with color c
+  begin
+    bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color (c));
+  end;
+
+procedure bitbuf_copy_pixel_noerase  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
+  // overwrite this pixel with color c
+  begin
+    if bool_from_color (c)
+      then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+  end;
+
+procedure bitbuf_blend_pixel (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr; cover : int8u );
+  // blend this pixel with color c (for bitbuf, blend can only add not subtract)
+  begin
+    if bool_from_color_and_cover (c, cover)
+      then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+  end;
+
+procedure bitbuf_copy_hline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
+  // overwrite every pixel in the range with color c
+  begin
+    copy_hline_using_bool (this, x, y, len, bool_from_color(c));
+  end;
+
+procedure bitbuf_copy_vline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
+  // overwrite every pixel in the range with color c
+  begin
+    copy_vline_using_bool (this, x, y, len, bool_from_color(c));
+  end;
+
+procedure bitbuf_copy_hline_noerase  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
+  begin
+    if bool_from_color(c)
+      then copy_hline_using_bool (this, x, y, len, true);
+    // else do nothing, no erasing a zero color
+  end;
+
+procedure bitbuf_copy_vline_noerase  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
+  begin
+    if bool_from_color(c)
+      then copy_vline_using_bool (this, x, y, len, true);
+    // else do nothing, no erasing a zero color
+  end;
+
+procedure bitbuf_blend_hline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
+  // blend every pixel in the range with color c and singular cover
+  begin
+    if bool_from_color_and_cover (c, cover)
+      then copy_hline_using_bool (this, x, y, len, true);
+  end;
+
+procedure bitbuf_blend_vline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
+  // blend every pixel in the range with color c and singular cover
+  begin
+    if bool_from_color_and_cover (c, cover)
+      then copy_vline_using_bool (this, x, y, len, true);
+  end;
+
+procedure bitbuf_blend_solid_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; covers : int8u_ptr );
+  // blend every pixel in the range with color c, using covers array
+  var
+    bb : byte_arr;
+  begin
+    if len=0 then exit;
+    if len=1 then begin
+      if bool_from_color_and_cover(c, covers^)
+        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      exit;
+      end;
+    bb := bitbytes_from_1color_and_covers (c, covers, len, x and 7);
+    apply_bitbytes (this, bb, x, y, len);
+  end;
+
+procedure bitbuf_blend_solid_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; covers : int8u_ptr );
+  // blend every pixel in the range with color c, using covers array
+  var
+    p : pbyte;
+    i, stride : longint;
+    alpha : byte;
+  begin
+    if len=0 then exit;
+    alpha := c^.a;
+    if len=1 then begin
+      if bool_from_two_alphas (alpha, covers^)
+        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      exit;
+      end;
+    stride := this^.m_rbuf^._stride;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    for i := 0 to len-1 do begin
+      if bool_from_two_alphas (alpha, covers^)
+        then pbyte_set_bool(p, x, true);
+      inc (p, stride);
+      inc (covers);
+      end;
+  end;
+
+procedure bitbuf_copy_color_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr);
+  // overwrite every pixel in the range with color from the colors array
+  var
+    p : pbyte;
+    i : longint;
+  begin
+    if len=0 then exit;
+    if len=1 then begin
+      bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
+      exit;
+      end;
+    // I could use bitbytes_from_colors here, but how to deal with the edges?
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    for i := x to x+len-1 do begin
+      if bool_from_color (colors)
+        then pbyte_set_bool (p, x, true)
+        else pbyte_set_bool (p, x, false);
+      inc (colors, sizeof (aggclr));
+      if i and 7 = 0 then inc(p);
+      end;
+  end;
+
+procedure bitbuf_copy_color_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr );
+  // overwrite every pixel in the range with color from the colors array
+  var
+    p : pbyte;
+    i, stride : longint;
+  begin
+    if len=0 then exit;
+    if len=1 then begin
+      bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
+      exit;
+      end;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    stride := this^.m_rbuf^._stride;
+    for i := 0 to len-1 do begin
+      if bool_from_color (colors)
+        then pbyte_set_bool (p, x, true)
+        else pbyte_set_bool (p, x, false);
+      inc (colors, sizeof (aggclr));
+      inc (p, stride);
+      end;
+  end;
+
+procedure bitbuf_copy_color_hspan_noerase (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr);
+  // overwrite every 0 pixel in the range with color from the colors array (no 1->0)
+  var
+    bb : byte_arr;
+  begin
+    if len=0 then exit;
+    if len=1 then begin
+      if bool_from_color(colors)
+        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      exit;
+      end;
+    bb := bitbytes_from_colors (colors, len, x and 7);
+    apply_bitbytes (this, bb, x, y, len);
+  end;
+
+procedure bitbuf_copy_color_vspan_noerase (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr );
+  // overwrite every 0 pixel in the range with color from the colors array (no 1->0)
+  var
+    p : pbyte;
+    i, stride : longint;
+  begin
+    if len=0 then exit;
+    if len=1 then begin
+      if bool_from_color(colors)
+        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      exit;
+      end;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    stride := this^.m_rbuf^._stride;
+    for i := 0 to len-1 do begin
+      if bool_from_color (colors)
+        then pbyte_set_bool (p, x, true);
+      inc (colors, sizeof (aggclr));
+      inc (p, stride);
+      end;
+  end;
+
+procedure bitbuf_blend_color_hspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr; covers : int8u_ptr; cover : int8u );
+  var
+    bb : byte_arr;
+  begin
+    if len=0 then exit;
+    if assigned (covers) then
+      bb := bitbytes_from_colors_and_covers (colors, covers, len, x and 7)
+    else if bool_from_one_alpha(cover) then
+      if cover < 255 then
+        bb := bitbytes_from_colors_and_1cover (colors, cover, len, x and 7)
+      else // cover = 255
+        bb := bitbytes_from_colors (colors, len, x and 7)
+    else exit; // cover is too small, no color will show
+    apply_bitbytes (this, bb, x, y, len);
+  end;
+
+procedure bitbuf_blend_color_vspan (this : pixel_formats_ptr; x, y : int; len : unsigned; colors : aggclr_ptr; covers : int8u_ptr; cover : int8u );
+  var
+    p : pbyte;
+    i, stride : longint;
+  begin
+    if len=0 then exit;
+    p := pbyte_of_bit (this^.m_rbuf, x, y);
+    stride := this^.m_rbuf^._stride;
+    if assigned (covers) then
+      for i := 0 to len-1 do begin
+        if bool_from_color_and_cover (colors, covers^)
+          then pbyte_set_bool (p, i, true);
+        inc (colors, sizeof(aggclr));
+        inc (covers);
+        inc (p, stride);
+        end
+    else if cover = 255 then
+      for i := 0 to len-1 do begin
+        if bool_from_color (colors)
+          then pbyte_set_bool (p, i, true);
+        inc (colors, sizeof(aggclr));
+        inc (p, stride);
+        end
+    else if bool_from_one_alpha(cover) then
+      for i := 0 to len-1 do begin
+        if bool_from_color_and_cover (colors, cover)
+          then pbyte_set_bool (p, i, true);
+        inc (colors, sizeof(aggclr));
+        inc (p, stride);
+        end;
+    // else do nothing: cover is too small, no color will show
+  end;
+
+procedure pixfmt_bitbuf_noerase (var pixf : pixel_formats; rb : rendering_buffer_ptr);
+  begin
+    pixf.Construct(rb, 1, 0);
+    pixf.m_pix_width:=1;
+
+    pixf.copy_pixel  := @bitbuf_copy_pixel_noerase;
+    pixf.blend_pixel := @bitbuf_blend_pixel;
+
+    pixf.pixel:= @bitbuf_pixel;
+
+    pixf.copy_hline  := @bitbuf_copy_hline_noerase;
+    pixf.copy_vline  := @bitbuf_copy_vline_noerase;
+    pixf.blend_hline := @bitbuf_blend_hline;
+    pixf.blend_vline := @bitbuf_blend_vline;
+
+    pixf.blend_solid_hspan  := @bitbuf_blend_solid_hspan;
+    pixf.blend_solid_vspan  := @bitbuf_blend_solid_vspan;
+ 
+    pixf.copy_color_hspan:=@bitbuf_copy_color_hspan_noerase;
+    pixf.copy_color_vspan:=@bitbuf_copy_color_vspan_noerase;
+    pixf.blend_color_hspan:=@bitbuf_blend_color_hspan;
+    pixf.blend_color_vspan:=@bitbuf_blend_color_vspan;
+  end;
+
+procedure pixfmt_bitbuf_copyerase (var pixf : pixel_formats; rb : rendering_buffer_ptr);
+  begin
+    pixf.Construct(rb, 1, 0);
+    pixf.m_pix_width:=1;
+
+    pixf.copy_pixel  := @bitbuf_copy_pixel;
+    pixf.blend_pixel := @bitbuf_blend_pixel;
+
+    pixf.pixel:= @bitbuf_pixel;
+
+    pixf.copy_hline  := @bitbuf_copy_hline;
+    pixf.copy_vline  := @bitbuf_copy_vline;
+    pixf.blend_hline := @bitbuf_blend_hline;
+    pixf.blend_vline := @bitbuf_blend_vline;
+
+    pixf.blend_solid_hspan  := @bitbuf_blend_solid_hspan;
+    pixf.blend_solid_vspan  := @bitbuf_blend_solid_vspan;
+ 
+    pixf.copy_color_hspan:=@bitbuf_copy_color_hspan;
+    pixf.copy_color_vspan:=@bitbuf_copy_color_vspan;
+    pixf.blend_color_hspan:=@bitbuf_blend_color_hspan;
+    pixf.blend_color_vspan:=@bitbuf_blend_color_vspan;
+  end;
 
 initialization
   bb_colors[true].ConstrInt(high(int8u), high(int8u));
