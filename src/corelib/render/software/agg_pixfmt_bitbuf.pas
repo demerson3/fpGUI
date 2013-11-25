@@ -16,11 +16,9 @@ uses
 var
   // minimum alpha value needed to mask a pixel. Perhaps it should be 1
   min_value_to_add_mask : byte = 51;
-  // for bitbuf_pixel, what aggclr corresponds to true/false?
-  bb_colors : array [false..true] of aggclr;
 
-// When used as a transparency mask, whatever we are draw only adds to the mask.
-// So even if a "copy" pixfmt func gets called, it will blend
+// When used as a transparency mask, nothing we draw should ever erase parts of the mask.
+// So even if a "copy" pixfmt func gets called, it will blend, keeping all 1's
 procedure pixfmt_bitbuf_noerase (var pixf : pixel_formats; rb : rendering_buffer_ptr);
 
 // However, this pixfmt does a straight copy, which may set 1 bits to 0
@@ -495,14 +493,6 @@ procedure apply_bitbytes (this : pixel_formats_ptr; bb : byte_arr; x, y : int; l
 
 { pixel_format functions }
 
-function bitbuf_pixel (this : pixel_formats_ptr; x, y : int ) : aggclr;
-  // return the "color" of one pixel, hopefully this never gets used
-  begin
-    result := bb_colors[bitbuf_get_bool (this^.m_rbuf, x, y)];
-  end;
-
-// function bitbuf_row   (this : pixel_formats_ptr; x, y : int ) : row_data_type;
-
 procedure bitbuf_copy_pixel  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
   // overwrite this pixel with color c
   begin
@@ -740,8 +730,6 @@ procedure pixfmt_bitbuf_noerase (var pixf : pixel_formats; rb : rendering_buffer
     pixf.copy_pixel  := @bitbuf_copy_pixel_noerase;
     pixf.blend_pixel := @bitbuf_blend_pixel;
 
-    pixf.pixel:= @bitbuf_pixel;
-
     pixf.copy_hline  := @bitbuf_copy_hline_noerase;
     pixf.copy_vline  := @bitbuf_copy_vline_noerase;
     pixf.blend_hline := @bitbuf_blend_hline;
@@ -764,8 +752,6 @@ procedure pixfmt_bitbuf_copyerase (var pixf : pixel_formats; rb : rendering_buff
     pixf.copy_pixel  := @bitbuf_copy_pixel;
     pixf.blend_pixel := @bitbuf_blend_pixel;
 
-    pixf.pixel:= @bitbuf_pixel;
-
     pixf.copy_hline  := @bitbuf_copy_hline;
     pixf.copy_vline  := @bitbuf_copy_vline;
     pixf.blend_hline := @bitbuf_blend_hline;
@@ -779,10 +765,6 @@ procedure pixfmt_bitbuf_copyerase (var pixf : pixel_formats; rb : rendering_buff
     pixf.blend_color_hspan:=@bitbuf_blend_color_hspan;
     pixf.blend_color_vspan:=@bitbuf_blend_color_vspan;
   end;
-
-initialization
-  bb_colors[true].ConstrInt(high(int8u), high(int8u));
-  bb_colors[false].ConstrInt(0,0);
 
 end.
 
