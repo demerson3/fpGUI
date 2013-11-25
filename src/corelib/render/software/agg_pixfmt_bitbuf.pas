@@ -14,8 +14,8 @@ uses
   agg_rendering_buffer;
 
 var
-  // minimum alpha value needed to mask a pixel. Perhaps it should be 1
-  min_value_to_add_mask : byte = 51;
+  // minimum alpha value needed to mask a pixel
+  min_value_to_add_mask : byte = 127;
 
 // When used as a transparency mask, nothing we draw should ever erase parts of the mask.
 // So even if a "copy" pixfmt func gets called, it will blend, keeping all 1's
@@ -237,7 +237,7 @@ procedure pbyte_set_bool (p : pbyte; x : int; b : boolean); inline;
   end;
 
 // as above, with a rendering_buffer param
-procedure bitbuf_set_bool (rb : rendering_buffer_ptr; x, y : int; b : boolean);
+procedure rb_set_bool (rb : rendering_buffer_ptr; x, y : int; b : boolean);
   begin
     pbyte_set_bool (pbyte_of_bit (rb,x,y), x, b);
   end;
@@ -411,12 +411,18 @@ function bitbytes_from_1color_and_covers (c : aggclr_ptr; covers : int8u_ptr;
     setlength (result, bitlen_to_bytelen_8bit(len));
     p := @result[pad shr 3];
     alpha := c^.a;
+    //write (StringOfChar('+',pad));
     for i := pad to len-1 do begin
+      //if bool_from_two_alphas (alpha, covers^) then write ('#') else write ('+');
+      //if i and 7 = 7 then write (' ');
       if bool_from_two_alphas (alpha, covers^)
         then p^ := p^ or focus_bit(i);
       inc (covers);
-      if i and 7 = 0 then inc(p);
+      if i and 7 = 7 then inc(p);
       end;
+    //writeln;
+    //dump_ba (result, '+', '#');
+    //writeln;
   end;
 
 function bitbytes_from_colors (colors : aggclr_ptr;
@@ -432,7 +438,7 @@ function bitbytes_from_colors (colors : aggclr_ptr;
       if bool_from_color (colors)
         then p^ := p^ or focus_bit(i);
       inc (colors, sizeof (aggclr));
-      if i and 7 = 0 then inc(p);
+      if i and 7 = 7 then inc(p);
       end;
   end;
 
@@ -453,7 +459,7 @@ function bitbytes_from_colors_and_1cover (colors : aggclr_ptr; cover : int8u;
       if bool_from_color_and_cover (colors, cover)
         then p^ := p^ or focus_bit(i);
       inc (colors, sizeof (aggclr));
-      if i and 7 = 0 then inc(p);
+      if i and 7 = 7 then inc(p);
       end;
   end;
 
@@ -471,7 +477,7 @@ function bitbytes_from_colors_and_covers (colors : aggclr_ptr; covers : int8u_pt
         then p^ := p^ or focus_bit(i);
       inc (colors, sizeof (aggclr));
       inc (covers);
-      if i and 7 = 0 then inc(p);
+      if i and 7 = 7 then inc(p);
       end;
   end;
 
@@ -491,42 +497,93 @@ procedure apply_bitbytes (this : pixel_formats_ptr; bb : byte_arr; x, y : int; l
       end;
   end;
 
+{.$define track_bitbuf_calls}
+{.$define echo_bitbuf_calls}
+
+{$ifdef track_bitbuf_calls}
+type
+  ta_enums = (ta_copy_pixel, ta_copy_pixel_noerase, ta_blend_pixel,
+      ta_copy_hline, ta_copy_vline, ta_copy_hline_noerase, ta_copy_vline_noerase,
+      ta_blend_hline, ta_blend_vline, ta_blend_solid_hspan, ta_blend_solid_vspan,
+      ta_copy_color_hspan, ta_copy_color_vspan,
+      ta_copy_color_hspan_noerase, ta_copy_color_vspan_noerase,
+      ta_blend_color_hspan, ta_blend_color_vspan);
+const
+  ta_strings : array [ta_enums] of string[32] = (
+      'copy_pixel', 'copy_pixel_noerase', 'blend_pixel',
+      'copy_hline','copy_vline', 'copy_hline_noerase', 'copy_vline_noerase',
+      'blend_hline', 'blend_vline', 'blend_solid_hspan', 'blend_solid_vspan',
+      'copy_color_hspan', 'copy_color_vspan',
+      'copy_color_hspan_noerase', 'copy_color_vspan_noerase',
+      'blend_color_hspan', 'blend_color_vspan');
+var
+  ta : array [ta_enums] of longint;
+{$endif}
+
+(*
+sed '/^procedure bitbuf_/{
+  h;
+  :loop; n; /begin/!bloop;
+  p; g;
+  s,^procedure ,,;
+  s, .*,,;
+  h;
+  s,^bitbuf_,    {$ifdef track_bitbuf_calls} inc(ta[ta_,;
+  s,$,]); {$endif},;
+  p; g;
+  s,^bitbuf_,    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_,;
+  s,$,]); {$endif},;
+  }'
+*)
+
 { pixel_format functions }
 
 procedure bitbuf_copy_pixel  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
   // overwrite this pixel with color c
   begin
-    bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color (c));
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_pixel]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_pixel]); {$endif}
+    rb_set_bool (this^.m_rbuf, x, y, bool_from_color (c));
   end;
 
 procedure bitbuf_copy_pixel_noerase  (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr );
   // overwrite this pixel with color c
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_pixel_noerase]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_pixel_noerase]); {$endif}
     if bool_from_color (c)
-      then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      then rb_set_bool (this^.m_rbuf, x, y, true);
   end;
 
 procedure bitbuf_blend_pixel (this : pixel_formats_ptr; x, y : int; c : aggclr_ptr; cover : int8u );
   // blend this pixel with color c (for bitbuf, blend can only add not subtract)
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_pixel]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_pixel]); {$endif}
     if bool_from_color_and_cover (c, cover)
-      then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+      then rb_set_bool (this^.m_rbuf, x, y, true);
   end;
 
 procedure bitbuf_copy_hline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
   // overwrite every pixel in the range with color c
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_hline]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_hline]); {$endif}
     copy_hline_using_bool (this, x, y, len, bool_from_color(c));
   end;
 
 procedure bitbuf_copy_vline  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
   // overwrite every pixel in the range with color c
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_vline]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_vline]); {$endif}
     copy_vline_using_bool (this, x, y, len, bool_from_color(c));
   end;
 
 procedure bitbuf_copy_hline_noerase  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_hline_noerase]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_hline_noerase]); {$endif}
     if bool_from_color(c)
       then copy_hline_using_bool (this, x, y, len, true);
     // else do nothing, no erasing a zero color
@@ -534,6 +591,8 @@ procedure bitbuf_copy_hline_noerase  (this : pixel_formats_ptr; x, y : int; len 
 
 procedure bitbuf_copy_vline_noerase  (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr );
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_vline_noerase]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_vline_noerase]); {$endif}
     if bool_from_color(c)
       then copy_vline_using_bool (this, x, y, len, true);
     // else do nothing, no erasing a zero color
@@ -542,6 +601,8 @@ procedure bitbuf_copy_vline_noerase  (this : pixel_formats_ptr; x, y : int; len 
 procedure bitbuf_blend_hline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
   // blend every pixel in the range with color c and singular cover
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_hline]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_hline]); {$endif}
     if bool_from_color_and_cover (c, cover)
       then copy_hline_using_bool (this, x, y, len, true);
   end;
@@ -549,6 +610,8 @@ procedure bitbuf_blend_hline (this : pixel_formats_ptr; x, y : int; len : unsign
 procedure bitbuf_blend_vline (this : pixel_formats_ptr; x, y : int; len : unsigned; c : aggclr_ptr; cover : int8u );
   // blend every pixel in the range with color c and singular cover
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_vline]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_vline]); {$endif}
     if bool_from_color_and_cover (c, cover)
       then copy_vline_using_bool (this, x, y, len, true);
   end;
@@ -558,10 +621,12 @@ procedure bitbuf_blend_solid_hspan (this : pixel_formats_ptr; x, y : int; len : 
   var
     bb : byte_arr;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_solid_hspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_solid_hspan]); {$endif}
     if len=0 then exit;
     if len=1 then begin
       if bool_from_color_and_cover(c, covers^)
-        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+        then rb_set_bool (this^.m_rbuf, x, y, true);
       exit;
       end;
     bb := bitbytes_from_1color_and_covers (c, covers, len, x and 7);
@@ -575,11 +640,13 @@ procedure bitbuf_blend_solid_vspan (this : pixel_formats_ptr; x, y : int; len : 
     i, stride : longint;
     alpha : byte;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_solid_vspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_solid_vspan]); {$endif}
     if len=0 then exit;
     alpha := c^.a;
     if len=1 then begin
       if bool_from_two_alphas (alpha, covers^)
-        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+        then rb_set_bool (this^.m_rbuf, x, y, true);
       exit;
       end;
     stride := this^.m_rbuf^._stride;
@@ -598,9 +665,11 @@ procedure bitbuf_copy_color_hspan (this : pixel_formats_ptr; x, y : int; len : u
     p : pbyte;
     i : longint;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_color_hspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_color_hspan]); {$endif}
     if len=0 then exit;
     if len=1 then begin
-      bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
+      rb_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
       exit;
       end;
     // I could use bitbytes_from_colors here, but how to deal with the edges?
@@ -620,9 +689,11 @@ procedure bitbuf_copy_color_vspan (this : pixel_formats_ptr; x, y : int; len : u
     p : pbyte;
     i, stride : longint;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_color_vspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_color_vspan]); {$endif}
     if len=0 then exit;
     if len=1 then begin
-      bitbuf_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
+      rb_set_bool (this^.m_rbuf, x, y, bool_from_color(colors));
       exit;
       end;
     p := pbyte_of_bit (this^.m_rbuf, x, y);
@@ -641,10 +712,12 @@ procedure bitbuf_copy_color_hspan_noerase (this : pixel_formats_ptr; x, y : int;
   var
     bb : byte_arr;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_color_hspan_noerase]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_color_hspan_noerase]); {$endif}
     if len=0 then exit;
     if len=1 then begin
       if bool_from_color(colors)
-        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+        then rb_set_bool (this^.m_rbuf, x, y, true);
       exit;
       end;
     bb := bitbytes_from_colors (colors, len, x and 7);
@@ -657,10 +730,12 @@ procedure bitbuf_copy_color_vspan_noerase (this : pixel_formats_ptr; x, y : int;
     p : pbyte;
     i, stride : longint;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_copy_color_vspan_noerase]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_copy_color_vspan_noerase]); {$endif}
     if len=0 then exit;
     if len=1 then begin
       if bool_from_color(colors)
-        then bitbuf_set_bool (this^.m_rbuf, x, y, true);
+        then rb_set_bool (this^.m_rbuf, x, y, true);
       exit;
       end;
     p := pbyte_of_bit (this^.m_rbuf, x, y);
@@ -677,6 +752,8 @@ procedure bitbuf_blend_color_hspan (this : pixel_formats_ptr; x, y : int; len : 
   var
     bb : byte_arr;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_color_hspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_color_hspan]); {$endif}
     if len=0 then exit;
     if assigned (covers) then
       bb := bitbytes_from_colors_and_covers (colors, covers, len, x and 7)
@@ -694,6 +771,8 @@ procedure bitbuf_blend_color_vspan (this : pixel_formats_ptr; x, y : int; len : 
     p : pbyte;
     i, stride : longint;
   begin
+    {$ifdef track_bitbuf_calls} inc(ta[ta_blend_color_vspan]); {$endif}
+    {$ifdef echo_bitbuf_calls} writeln(ta_strings[ta_blend_color_vspan]); {$endif}
     if len=0 then exit;
     p := pbyte_of_bit (this^.m_rbuf, x, y);
     stride := this^.m_rbuf^._stride;
@@ -765,6 +844,13 @@ procedure pixfmt_bitbuf_copyerase (var pixf : pixel_formats; rb : rendering_buff
     pixf.blend_color_hspan:=@bitbuf_blend_color_hspan;
     pixf.blend_color_vspan:=@bitbuf_blend_color_vspan;
   end;
+
+{$ifdef track_bitbuf_calls}
+var tai : ta_enums;
+initialization
+  for tai := low(tai) to high(tai) do
+    ta[tai] := 0;
+{$endif}
 
 end.
 
