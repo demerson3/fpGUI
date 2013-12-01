@@ -222,6 +222,8 @@ type
   TfpgCanvasBase = class;
 
 
+  { TfpgImageBase }
+
   TfpgImageBase = class(TObject)
   private
     function    GetColor(x, y: TfpgCoord): TfpgColor;
@@ -235,15 +237,17 @@ type
     FImageDataSize: integer;
     FMaskData: pointer;
     FMaskDataSize: integer;
+    FMaskWidth: integer;
     FMaskPoint: TPoint;
     procedure   DoFreeImage; virtual; abstract;
     procedure   DoInitImage(acolordepth, awidth, aheight: integer; aimgdata: Pointer); virtual; abstract;
-    procedure   DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer); virtual; abstract;
+    procedure   DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer); virtual; abstract;
   public
     constructor Create;
     destructor  Destroy; override;
     procedure   Invert(IncludeMask: Boolean = False);
     procedure   FreeImage;
+    procedure   FreeMask;
     procedure   AllocateImage(acolordepth, awidth, aheight: integer);
     procedure   AllocateMask;
     procedure   CreateMaskFromSample(x, y: TfpgCoord);
@@ -254,6 +258,7 @@ type
     property    ImageDataSize: integer read FImageDataSize;
     property    MaskData: pointer read FMaskData;
     property    MaskDataSize: integer read FMaskDataSize;
+    property    MaskWidth: integer read FMaskWidth;
     property    Width: integer read FWidth;
     property    Height: integer read FHeight;
     property    ColorDepth: integer read FColorDepth;
@@ -2236,14 +2241,20 @@ begin
     FreeMem(FImageData, FImageDataSize);
   FImageData     := nil;
   FImageDataSize := 0;
+  FWidth        := 0;
+  FHeight       := 0;
+  FreeMask;
+//  DoFreeImage;
+end;
+
+procedure TfpgImageBase.FreeMask;
+begin
   if FMaskData <> nil then
     FreeMem(FMaskData, FMaskDataSize);
   FMaskData     := nil;
   FMaskDataSize := 0;
   FMasked       := False;
-  FWidth        := 0;
-  FHeight       := 0;
-//  DoFreeImage;
+  FMaskWidth    := 0;
 end;
 
 procedure TfpgImageBase.AllocateImage(acolordepth, awidth, aheight: integer);
@@ -2269,8 +2280,6 @@ begin
 end;
 
 procedure TfpgImageBase.AllocateMask;
-var
-  dww: integer;
 begin
   if (FWidth < 1) or (FHeight < 1) then
     Exit; //==>
@@ -2279,8 +2288,8 @@ begin
   if FMaskData <> nil then
     FreeMem(FMaskData);
 
-  dww           := (FWidth + 31) div 32;
-  FMaskDataSize := dww * FHeight * 4;
+  FMaskWidth    := ((FWidth + 31) div 32) * 4;
+  FMaskDataSize := FMaskWidth * FHeight;
   GetMem(FMaskData, FMaskDataSize);
 end;
 
@@ -2387,7 +2396,7 @@ begin
     DoInitImage(FColorDepth, FWidth, FHeight, FImageData);
 
   if FMaskData <> nil then
-    DoInitImageMask(FWidth, FHeight, FMaskData);
+    DoInitImageMask(FWidth, FHeight, FMaskWidth, FMaskData);
 end;
 
 { TfpgApplicationBase }

@@ -162,7 +162,7 @@ type
     function    XImageMask: PXImage;
     procedure   DoFreeImage; override;
     procedure   DoInitImage(acolordepth, awidth, aheight: integer; aimgdata: Pointer); override;
-    procedure   DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer); override;
+    procedure   DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer); override;
   public
     constructor Create;
   end;
@@ -3250,7 +3250,7 @@ begin
   XInitImage(@FXimg);
 end;
 
-procedure TfpgX11Image.DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer);
+procedure TfpgX11Image.DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer);
 begin
   FMasked := True;
 

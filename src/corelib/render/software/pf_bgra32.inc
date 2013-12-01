@@ -282,7 +282,7 @@ begin
       order_bgra(p^ ).A:=base_mask;
 
      end
-    else
+    else if alpha > 0 then
      blend_pix_bgra(p ,c.r ,c.g ,c.b ,alpha ,covers^ );
 
     inc(ptrcomp(p ) ,4 );

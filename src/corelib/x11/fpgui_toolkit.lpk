@@ -29,7 +29,7 @@
     <Description Value="fpGUI Toolkit"/>
     <License Value="LGPL 2 with static linking exception."/>
     <Version Major="1"/>
-    <Files Count="100">
+    <Files Count="271">
       <Item1>
         <Filename Value="../stdimages.inc"/>
         <Type Value="Include"/>
@@ -430,6 +430,690 @@
         <Filename Value="../../gui/fpg_scrollframe.pas"/>
         <UnitName Value="fpg_scrollframe"/>
       </Item100>
+      <Item101>
+        <Filename Value="../render/software/agg_alpha_mask_u8.pas"/>
+        <UnitName Value="agg_alpha_mask_u8"/>
+      </Item101>
+      <Item102>
+        <Filename Value="../render/software/agg_arc.pas"/>
+        <UnitName Value="agg_arc"/>
+      </Item102>
+      <Item103>
+        <Filename Value="../render/software/agg_array.pas"/>
+        <UnitName Value="agg_array"/>
+      </Item103>
+      <Item104>
+        <Filename Value="../render/software/agg_arrowhead.pas"/>
+        <UnitName Value="agg_arrowhead"/>
+      </Item104>
+      <Item105>
+        <Filename Value="../render/software/agg_basics.pas"/>
+        <UnitName Value="agg_basics"/>
+      </Item105>
+      <Item106>
+        <Filename Value="../render/software/agg_bezier_arc.pas"/>
+        <UnitName Value="agg_bezier_arc"/>
+      </Item106>
+      <Item107>
+        <Filename Value="../render/software/ctrl/agg_bezier_ctrl.pas"/>
+        <UnitName Value="agg_bezier_ctrl"/>
+      </Item107>
+      <Item108>
+        <Filename Value="../render/software/agg_bitset_iterator.pas"/>
+        <UnitName Value="agg_bitset_iterator"/>
+      </Item108>
+      <Item109>
+        <Filename Value="../render/software/agg_blur.pas"/>
+        <UnitName Value="agg_blur"/>
+      </Item109>
+      <Item110>
+        <Filename Value="../render/software/agg_bounding_rect.pas"/>
+        <UnitName Value="agg_bounding_rect"/>
+      </Item110>
+      <Item111>
+        <Filename Value="../render/software/agg_bspline.pas"/>
+        <UnitName Value="agg_bspline"/>
+      </Item111>
+      <Item112>
+        <Filename Value="../render/software/ctrl/agg_cbox_ctrl.pas"/>
+        <UnitName Value="agg_cbox_ctrl"/>
+      </Item112>
+      <Item113>
+        <Filename Value="../render/software/agg_clip_liang_barsky.pas"/>
+        <UnitName Value="agg_clip_liang_barsky"/>
+      </Item113>
+      <Item114>
+        <Filename Value="../render/software/agg_color.pas"/>
+        <UnitName Value="agg_color"/>
+      </Item114>
+      <Item115>
+        <Filename Value="../render/software/util/agg_color_conv.pas"/>
+        <UnitName Value="agg_color_conv"/>
+      </Item115>
+      <Item116>
+        <Filename Value="../render/software/agg_conv_adaptor_vcgen.pas"/>
+        <UnitName Value="agg_conv_adaptor_vcgen"/>
+      </Item116>
+      <Item117>
+        <Filename Value="../render/software/agg_conv_adaptor_vpgen.pas"/>
+        <UnitName Value="agg_conv_adaptor_vpgen"/>
+      </Item117>
+      <Item118>
+        <Filename Value="../render/software/agg_conv_bspline.pas"/>
+        <UnitName Value="agg_conv_bspline"/>
+      </Item118>
+      <Item119>
+        <Filename Value="../render/software/agg_conv_clip_polygon.pas"/>
+        <UnitName Value="agg_conv_clip_polygon"/>
+      </Item119>
+      <Item120>
+        <Filename Value="../render/software/agg_conv_clip_polyline.pas"/>
+        <UnitName Value="agg_conv_clip_polyline"/>
+      </Item120>
+      <Item121>
+        <Filename Value="../render/software/agg_conv_concat.pas"/>
+        <UnitName Value="agg_conv_concat"/>
+      </Item121>
+      <Item122>
+        <Filename Value="../render/software/agg_conv_contour.pas"/>
+        <UnitName Value="agg_conv_contour"/>
+      </Item122>
+      <Item123>
+        <Filename Value="../render/software/agg_conv_curve.pas"/>
+        <UnitName Value="agg_conv_curve"/>
+      </Item123>
+      <Item124>
+        <Filename Value="../render/software/agg_conv_dash.pas"/>
+        <UnitName Value="agg_conv_dash"/>
+      </Item124>
+      <Item125>
+        <Filename Value="../render/software/agg_conv_marker.pas"/>
+        <UnitName Value="agg_conv_marker"/>
+      </Item125>
+      <Item126>
+        <Filename Value="../render/software/agg_conv_marker_adaptor.pas"/>
+        <UnitName Value="agg_conv_marker_adaptor"/>
+      </Item126>
+      <Item127>
+        <Filename Value="../render/software/agg_conv_segmentator.pas"/>
+        <UnitName Value="agg_conv_segmentator"/>
+      </Item127>
+      <Item128>
+        <Filename Value="../render/software/agg_conv_shorten_path.pas"/>
+        <UnitName Value="agg_conv_shorten_path"/>
+      </Item128>
+      <Item129>
+        <Filename Value="../render/software/agg_conv_smooth_poly1.pas"/>
+        <UnitName Value="agg_conv_smooth_poly1"/>
+      </Item129>
+      <Item130>
+        <Filename Value="../render/software/agg_conv_stroke.pas"/>
+        <UnitName Value="agg_conv_stroke"/>
+      </Item130>
+      <Item131>
+        <Filename Value="../render/software/agg_conv_transform.pas"/>
+        <UnitName Value="agg_conv_transform"/>
+      </Item131>
+      <Item132>
+        <Filename Value="../render/software/ctrl/agg_ctrl.pas"/>
+        <UnitName Value="agg_ctrl"/>
+      </Item132>
+      <Item133>
+        <Filename Value="../render/software/agg_curves.pas"/>
+        <UnitName Value="agg_curves"/>
+      </Item133>
+      <Item134>
+        <Filename Value="../render/software/agg_dda_line.pas"/>
+        <UnitName Value="agg_dda_line"/>
+      </Item134>
+      <Item135>
+        <Filename Value="../render/software/agg_ellipse.pas"/>
+        <UnitName Value="agg_ellipse"/>
+      </Item135>
+      <Item136>
+        <Filename Value="../render/software/agg_ellipse_bresenham.pas"/>
+        <UnitName Value="agg_ellipse_bresenham"/>
+      </Item136>
+      <Item137>
+        <Filename Value="../render/software/agg_embedded_raster_fonts.pas"/>
+        <UnitName Value="agg_embedded_raster_fonts"/>
+      </Item137>
+      <Item138>
+        <Filename Value="../render/software/agg_font_cache_manager.pas"/>
+        <UnitName Value="agg_font_cache_manager"/>
+      </Item138>
+      <Item139>
+        <Filename Value="../render/software/agg_font_engine.pas"/>
+        <UnitName Value="agg_font_engine"/>
+      </Item139>
+      <Item140>
+        <Filename Value="../render/software/agg_font_freetype.pas"/>
+        <UnitName Value="agg_font_freetype"/>
+      </Item140>
+      <Item141>
+        <Filename Value="../render/software/agg_font_freetype_lib.pas"/>
+        <UnitName Value="agg_font_freetype_lib"/>
+      </Item141>
+      <Item142>
+        <Filename Value="../render/software/ctrl/agg_gamma_ctrl.pas"/>
+        <UnitName Value="agg_gamma_ctrl"/>
+      </Item142>
+      <Item143>
+        <Filename Value="../render/software/agg_gamma_functions.pas"/>
+        <UnitName Value="agg_gamma_functions"/>
+      </Item143>
+      <Item144>
+        <Filename Value="../render/software/agg_gamma_lut.pas"/>
+        <UnitName Value="agg_gamma_lut"/>
+      </Item144>
+      <Item145>
+        <Filename Value="../render/software/ctrl/agg_gamma_spline.pas"/>
+        <UnitName Value="agg_gamma_spline"/>
+      </Item145>
+      <Item146>
+        <Filename Value="../render/software/agg_glyph_raster_bin.pas"/>
+        <UnitName Value="agg_glyph_raster_bin"/>
+      </Item146>
+      <Item147>
+        <Filename Value="../render/software/agg_gradient_lut.pas"/>
+        <UnitName Value="agg_gradient_lut"/>
+      </Item147>
+      <Item148>
+        <Filename Value="../render/software/agg_gsv_text.pas"/>
+        <UnitName Value="agg_gsv_text"/>
+      </Item148>
+      <Item149>
+        <Filename Value="../render/software/agg_image_filters.pas"/>
+        <UnitName Value="agg_image_filters"/>
+      </Item149>
+      <Item150>
+        <Filename Value="../render/software/agg_line_aa_basics.pas"/>
+        <UnitName Value="agg_line_aa_basics"/>
+      </Item150>
+      <Item151>
+        <Filename Value="../render/software/platform/linux/agg_linux_mini_libc.pas"/>
+        <UnitName Value="agg_linux_mini_libc"/>
+      </Item151>
+      <Item152>
+        <Filename Value="../render/software/agg_math.pas"/>
+        <UnitName Value="agg_math"/>
+      </Item152>
+      <Item153>
+        <Filename Value="../render/software/agg_math_stroke.pas"/>
+        <UnitName Value="agg_math_stroke"/>
+      </Item153>
+      <Item154>
+        <Filename Value="../render/software/agg_mode.inc"/>
+        <Type Value="Include"/>
+      </Item154>
+      <Item155>
+        <Filename Value="../render/software/agg_path_storage.pas"/>
+        <UnitName Value="agg_path_storage"/>
+      </Item155>
+      <Item156>
+        <Filename Value="../render/software/agg_path_storage_integer.pas"/>
+        <UnitName Value="agg_path_storage_integer"/>
+      </Item156>
+      <Item157>
+        <Filename Value="../render/software/agg_pattern_filters_rgba.pas"/>
+        <UnitName Value="agg_pattern_filters_rgba"/>
+      </Item157>
+      <Item158>
+        <Filename Value="../render/software/agg_pixfmt.pas"/>
+        <UnitName Value="agg_pixfmt"/>
+      </Item158>
+      <Item159>
+        <Filename Value="../render/software/agg_pixfmt_amask_adaptor.pas"/>
+        <UnitName Value="agg_pixfmt_amask_adaptor"/>
+      </Item159>
+      <Item160>
+        <Filename Value="../render/software/agg_pixfmt_gray.pas"/>
+        <UnitName Value="agg_pixfmt_gray"/>
+      </Item160>
+      <Item161>
+        <Filename Value="../render/software/agg_pixfmt_rgb.pas"/>
+        <UnitName Value="agg_pixfmt_rgb"/>
+      </Item161>
+      <Item162>
+        <Filename Value="../render/software/agg_pixfmt_rgba.pas"/>
+        <UnitName Value="agg_pixfmt_rgba"/>
+      </Item162>
+      <Item163>
+        <Filename Value="../render/software/agg_pixfmt_rgb_packed.pas"/>
+        <UnitName Value="agg_pixfmt_rgb_packed"/>
+      </Item163>
+      <Item164>
+        <Filename Value="../render/software/agg_pixfmt_transposer.pas"/>
+        <UnitName Value="agg_pixfmt_transposer"/>
+      </Item164>
+      <Item165>
+        <Filename Value="../render/software/agg_platform_gdi.inc"/>
+        <Type Value="Include"/>
+      </Item165>
+      <Item166>
+        <Filename Value="../render/software/platform/linux/agg_platform_support.pas"/>
+        <UnitName Value="agg_platform_support"/>
+      </Item166>
+      <Item167>
+        <Filename Value="../render/software/agg_platform_x11.inc"/>
+        <Type Value="Include"/>
+      </Item167>
+      <Item168>
+        <Filename Value="../render/software/ctrl/agg_polygon_ctrl.pas"/>
+        <UnitName Value="agg_polygon_ctrl"/>
+      </Item168>
+      <Item169>
+        <Filename Value="../render/software/agg_rasterizer_cells_aa.pas"/>
+        <UnitName Value="agg_rasterizer_cells_aa"/>
+      </Item169>
+      <Item170>
+        <Filename Value="../render/software/agg_rasterizer_compound_aa.pas"/>
+        <UnitName Value="agg_rasterizer_compound_aa"/>
+      </Item170>
+      <Item171>
+        <Filename Value="../render/software/agg_rasterizer_outline.pas"/>
+        <UnitName Value="agg_rasterizer_outline"/>
+      </Item171>
+      <Item172>
+        <Filename Value="../render/software/agg_rasterizer_outline_aa.pas"/>
+        <UnitName Value="agg_rasterizer_outline_aa"/>
+      </Item172>
+      <Item173>
+        <Filename Value="../render/software/agg_rasterizer_scanline_aa.pas"/>
+        <UnitName Value="agg_rasterizer_scanline_aa"/>
+      </Item173>
+      <Item174>
+        <Filename Value="../render/software/agg_rasterizer_sl_clip.pas"/>
+        <UnitName Value="agg_rasterizer_sl_clip"/>
+      </Item174>
+      <Item175>
+        <Filename Value="../render/software/ctrl/agg_rbox_ctrl.pas"/>
+        <UnitName Value="agg_rbox_ctrl"/>
+      </Item175>
+      <Item176>
+        <Filename Value="../render/software/agg_renderer_base.pas"/>
+        <UnitName Value="agg_renderer_base"/>
+      </Item176>
+      <Item177>
+        <Filename Value="../render/software/agg_renderer_markers.pas"/>
+        <UnitName Value="agg_renderer_markers"/>
+      </Item177>
+      <Item178>
+        <Filename Value="../render/software/agg_renderer_mclip.pas"/>
+        <UnitName Value="agg_renderer_mclip"/>
+      </Item178>
+      <Item179>
+        <Filename Value="../render/software/agg_renderer_outline_aa.pas"/>
+        <UnitName Value="agg_renderer_outline_aa"/>
+      </Item179>
+      <Item180>
+        <Filename Value="../render/software/agg_renderer_outline_image.pas"/>
+        <UnitName Value="agg_renderer_outline_image"/>
+      </Item180>
+      <Item181>
+        <Filename Value="../render/software/agg_renderer_primitives.pas"/>
+        <UnitName Value="agg_renderer_primitives"/>
+      </Item181>
+      <Item182>
+        <Filename Value="../render/software/agg_renderer_raster_text.pas"/>
+        <UnitName Value="agg_renderer_raster_text"/>
+      </Item182>
+      <Item183>
+        <Filename Value="../render/software/agg_renderer_scanline.pas"/>
+        <UnitName Value="agg_renderer_scanline"/>
+      </Item183>
+      <Item184>
+        <Filename Value="../render/software/agg_rendering_buffer.pas"/>
+        <UnitName Value="agg_rendering_buffer"/>
+      </Item184>
+      <Item185>
+        <Filename Value="../render/software/agg_rendering_buffer_dynarow.pas"/>
+        <UnitName Value="agg_rendering_buffer_dynarow"/>
+      </Item185>
+      <Item186>
+        <Filename Value="../render/software/agg_render_scanlines.pas"/>
+        <UnitName Value="agg_render_scanlines"/>
+      </Item186>
+      <Item187>
+        <Filename Value="../render/software/agg_rounded_rect.pas"/>
+        <UnitName Value="agg_rounded_rect"/>
+      </Item187>
+      <Item188>
+        <Filename Value="../render/software/ctrl/agg_scale_ctrl.pas"/>
+        <UnitName Value="agg_scale_ctrl"/>
+      </Item188>
+      <Item189>
+        <Filename Value="../render/software/agg_scanline.pas"/>
+        <UnitName Value="agg_scanline"/>
+      </Item189>
+      <Item190>
+        <Filename Value="../render/software/agg_scanline_bin.pas"/>
+        <UnitName Value="agg_scanline_bin"/>
+      </Item190>
+      <Item191>
+        <Filename Value="../render/software/agg_scanline_boolean_algebra.pas"/>
+        <UnitName Value="agg_scanline_boolean_algebra"/>
+      </Item191>
+      <Item192>
+        <Filename Value="../render/software/agg_scanline_p.pas"/>
+        <UnitName Value="agg_scanline_p"/>
+      </Item192>
+      <Item193>
+        <Filename Value="../render/software/agg_scanline_storage_aa.pas"/>
+        <UnitName Value="agg_scanline_storage_aa"/>
+      </Item193>
+      <Item194>
+        <Filename Value="../render/software/agg_scanline_storage_bin.pas"/>
+        <UnitName Value="agg_scanline_storage_bin"/>
+      </Item194>
+      <Item195>
+        <Filename Value="../render/software/agg_scanline_u.pas"/>
+        <UnitName Value="agg_scanline_u"/>
+      </Item195>
+      <Item196>
+        <Filename Value="../render/software/agg_shorten_path.pas"/>
+        <UnitName Value="agg_shorten_path"/>
+      </Item196>
+      <Item197>
+        <Filename Value="../render/software/agg_simul_eq.pas"/>
+        <UnitName Value="agg_simul_eq"/>
+      </Item197>
+      <Item198>
+        <Filename Value="../render/software/ctrl/agg_slider_ctrl.pas"/>
+        <UnitName Value="agg_slider_ctrl"/>
+      </Item198>
+      <Item199>
+        <Filename Value="../render/software/agg_span_allocator.pas"/>
+        <UnitName Value="agg_span_allocator"/>
+      </Item199>
+      <Item200>
+        <Filename Value="../render/software/agg_span_converter.pas"/>
+        <UnitName Value="agg_span_converter"/>
+      </Item200>
+      <Item201>
+        <Filename Value="../render/software/agg_span_generator.pas"/>
+        <UnitName Value="agg_span_generator"/>
+      </Item201>
+      <Item202>
+        <Filename Value="../render/software/agg_span_gouraud.pas"/>
+        <UnitName Value="agg_span_gouraud"/>
+      </Item202>
+      <Item203>
+        <Filename Value="../render/software/agg_span_gouraud_gray.pas"/>
+        <UnitName Value="agg_span_gouraud_gray"/>
+      </Item203>
+      <Item204>
+        <Filename Value="../render/software/agg_span_gouraud_rgba.pas"/>
+        <UnitName Value="agg_span_gouraud_rgba"/>
+      </Item204>
+      <Item205>
+        <Filename Value="../render/software/agg_span_gradient.pas"/>
+        <UnitName Value="agg_span_gradient"/>
+      </Item205>
+      <Item206>
+        <Filename Value="../render/software/agg_span_gradient_alpha.pas"/>
+        <UnitName Value="agg_span_gradient_alpha"/>
+      </Item206>
+      <Item207>
+        <Filename Value="../render/software/agg_span_gradient_contour.pas"/>
+        <UnitName Value="agg_span_gradient_contour"/>
+      </Item207>
+      <Item208>
+        <Filename Value="../render/software/agg_span_gradient_image.pas"/>
+        <UnitName Value="agg_span_gradient_image"/>
+      </Item208>
+      <Item209>
+        <Filename Value="../render/software/agg_span_image_filter.pas"/>
+        <UnitName Value="agg_span_image_filter"/>
+      </Item209>
+      <Item210>
+        <Filename Value="../render/software/agg_span_image_filter_gray.pas"/>
+        <UnitName Value="agg_span_image_filter_gray"/>
+      </Item210>
+      <Item211>
+        <Filename Value="../render/software/agg_span_image_filter_rgb.pas"/>
+        <UnitName Value="agg_span_image_filter_rgb"/>
+      </Item211>
+      <Item212>
+        <Filename Value="../render/software/agg_span_image_filter_rgba.pas"/>
+        <UnitName Value="agg_span_image_filter_rgba"/>
+      </Item212>
+      <Item213>
+        <Filename Value="../render/software/agg_span_image_resample.pas"/>
+        <UnitName Value="agg_span_image_resample"/>
+      </Item213>
+      <Item214>
+        <Filename Value="../render/software/agg_span_image_resample_gray.pas"/>
+        <UnitName Value="agg_span_image_resample_gray"/>
+      </Item214>
+      <Item215>
+        <Filename Value="../render/software/agg_span_image_resample_rgb.pas"/>
+        <UnitName Value="agg_span_image_resample_rgb"/>
+      </Item215>
+      <Item216>
+        <Filename Value="../render/software/agg_span_image_resample_rgba.pas"/>
+        <UnitName Value="agg_span_image_resample_rgba"/>
+      </Item216>
+      <Item217>
+        <Filename Value="../render/software/agg_span_interpolator_adaptor.pas"/>
+        <UnitName Value="agg_span_interpolator_adaptor"/>
+      </Item217>
+      <Item218>
+        <Filename Value="../render/software/agg_span_interpolator_linear.pas"/>
+        <UnitName Value="agg_span_interpolator_linear"/>
+      </Item218>
+      <Item219>
+        <Filename Value="../render/software/agg_span_interpolator_persp.pas"/>
+        <UnitName Value="agg_span_interpolator_persp"/>
+      </Item219>
+      <Item220>
+        <Filename Value="../render/software/agg_span_interpolator_trans.pas"/>
+        <UnitName Value="agg_span_interpolator_trans"/>
+      </Item220>
+      <Item221>
+        <Filename Value="../render/software/agg_span_pattern.pas"/>
+        <UnitName Value="agg_span_pattern"/>
+      </Item221>
+      <Item222>
+        <Filename Value="../render/software/agg_span_pattern_filter_rgb.pas"/>
+        <UnitName Value="agg_span_pattern_filter_rgb"/>
+      </Item222>
+      <Item223>
+        <Filename Value="../render/software/agg_span_pattern_rgba.pas"/>
+        <UnitName Value="agg_span_pattern_rgba"/>
+      </Item223>
+      <Item224>
+        <Filename Value="../render/software/agg_span_solid.pas"/>
+        <UnitName Value="agg_span_solid"/>
+      </Item224>
+      <Item225>
+        <Filename Value="../render/software/agg_span_subdiv_adaptor.pas"/>
+        <UnitName Value="agg_span_subdiv_adaptor"/>
+      </Item225>
+      <Item226>
+        <Filename Value="../render/software/ctrl/agg_spline_ctrl.pas"/>
+        <UnitName Value="agg_spline_ctrl"/>
+      </Item226>
+      <Item227>
+        <Filename Value="../render/software/agg_trans_affine.pas"/>
+        <UnitName Value="agg_trans_affine"/>
+      </Item227>
+      <Item228>
+        <Filename Value="../render/software/agg_trans_bilinear.pas"/>
+        <UnitName Value="agg_trans_bilinear"/>
+      </Item228>
+      <Item229>
+        <Filename Value="../render/software/agg_trans_double_path.pas"/>
+        <UnitName Value="agg_trans_double_path"/>
+      </Item229>
+      <Item230>
+        <Filename Value="../render/software/agg_trans_perspective.pas"/>
+        <UnitName Value="agg_trans_perspective"/>
+      </Item230>
+      <Item231>
+        <Filename Value="../render/software/agg_trans_single_path.pas"/>
+        <UnitName Value="agg_trans_single_path"/>
+      </Item231>
+      <Item232>
+        <Filename Value="../render/software/agg_trans_viewport.pas"/>
+        <UnitName Value="agg_trans_viewport"/>
+      </Item232>
+      <Item233>
+        <Filename Value="../render/software/agg_trans_warp_magnifier.pas"/>
+        <UnitName Value="agg_trans_warp_magnifier"/>
+      </Item233>
+      <Item234>
+        <Filename Value="../render/software/agg_vcgen_bspline.pas"/>
+        <UnitName Value="agg_vcgen_bspline"/>
+      </Item234>
+      <Item235>
+        <Filename Value="../render/software/agg_vcgen_contour.pas"/>
+        <UnitName Value="agg_vcgen_contour"/>
+      </Item235>
+      <Item236>
+        <Filename Value="../render/software/agg_vcgen_dash.pas"/>
+        <UnitName Value="agg_vcgen_dash"/>
+      </Item236>
+      <Item237>
+        <Filename Value="../render/software/agg_vcgen_markers_term.pas"/>
+        <UnitName Value="agg_vcgen_markers_term"/>
+      </Item237>
+      <Item238>
+        <Filename Value="../render/software/agg_vcgen_smooth_poly1.pas"/>
+        <UnitName Value="agg_vcgen_smooth_poly1"/>
+      </Item238>
+      <Item239>
+        <Filename Value="../render/software/agg_vcgen_stroke.pas"/>
+        <UnitName Value="agg_vcgen_stroke"/>
+      </Item239>
+      <Item240>
+        <Filename Value="../render/software/agg_vcgen_vertex_sequence.pas"/>
+        <UnitName Value="agg_vcgen_vertex_sequence"/>
+      </Item240>
+      <Item241>
+        <Filename Value="../render/software/agg_vertex_sequence.pas"/>
+        <UnitName Value="agg_vertex_sequence"/>
+      </Item241>
+      <Item242>
+        <Filename Value="../render/software/agg_vertex_source.pas"/>
+        <UnitName Value="agg_vertex_source"/>
+      </Item242>
+      <Item243>
+        <Filename Value="../render/software/agg_vpgen_clip_polygon.pas"/>
+        <UnitName Value="agg_vpgen_clip_polygon"/>
+      </Item243>
+      <Item244>
+        <Filename Value="../render/software/agg_vpgen_clip_polyline.pas"/>
+        <UnitName Value="agg_vpgen_clip_polyline"/>
+      </Item244>
+      <Item245>
+        <Filename Value="../render/software/agg_vpgen_segmentator.pas"/>
+        <UnitName Value="agg_vpgen_segmentator"/>
+      </Item245>
+      <Item246>
+        <Filename Value="../render/software/platform/linux/file_utils_.pas"/>
+        <UnitName Value="file_utils_"/>
+      </Item246>
+      <Item247>
+        <Filename Value="../render/software/pf_abgr32.inc"/>
+        <Type Value="Include"/>
+      </Item247>
+      <Item248>
+        <Filename Value="../render/software/pf_abgr32_pre.inc"/>
+        <Type Value="Include"/>
+      </Item248>
+      <Item249>
+        <Filename Value="../render/software/pf_alpha32.inc"/>
+        <Type Value="Include"/>
+      </Item249>
+      <Item250>
+        <Filename Value="../render/software/pf_argb32.inc"/>
+        <Type Value="Include"/>
+      </Item250>
+      <Item251>
+        <Filename Value="../render/software/pf_argb32_pre.inc"/>
+        <Type Value="Include"/>
+      </Item251>
+      <Item252>
+        <Filename Value="../render/software/pf_bgr24.inc"/>
+        <Type Value="Include"/>
+      </Item252>
+      <Item253>
+        <Filename Value="../render/software/pf_bgr24_gamma.inc"/>
+        <Type Value="Include"/>
+      </Item253>
+      <Item254>
+        <Filename Value="../render/software/pf_bgr24_pre.inc"/>
+        <Type Value="Include"/>
+      </Item254>
+      <Item255>
+        <Filename Value="../render/software/pf_bgra32.inc"/>
+        <Type Value="Include"/>
+      </Item255>
+      <Item256>
+        <Filename Value="../render/software/pf_bgra32_pre.inc"/>
+        <Type Value="Include"/>
+      </Item256>
+      <Item257>
+        <Filename Value="../render/software/pf_cubl32.inc"/>
+        <Type Value="Include"/>
+      </Item257>
+      <Item258>
+        <Filename Value="../render/software/pf_gray8.inc"/>
+        <Type Value="Include"/>
+      </Item258>
+      <Item259>
+        <Filename Value="../render/software/pf_gray8_pre.inc"/>
+        <Type Value="Include"/>
+      </Item259>
+      <Item260>
+        <Filename Value="../render/software/pf_rgb24.inc"/>
+        <Type Value="Include"/>
+      </Item260>
+      <Item261>
+        <Filename Value="../render/software/pf_rgb24_gamma.inc"/>
+        <Type Value="Include"/>
+      </Item261>
+      <Item262>
+        <Filename Value="../render/software/pf_rgb24_pre.inc"/>
+        <Type Value="Include"/>
+      </Item262>
+      <Item263>
+        <Filename Value="../render/software/pf_rgb555.inc"/>
+        <Type Value="Include"/>
+      </Item263>
+      <Item264>
+        <Filename Value="../render/software/pf_rgb555_gamma.inc"/>
+        <Type Value="Include"/>
+      </Item264>
+      <Item265>
+        <Filename Value="../render/software/pf_rgb555_pre.inc"/>
+        <Type Value="Include"/>
+      </Item265>
+      <Item266>
+        <Filename Value="../render/software/pf_rgb565.inc"/>
+        <Type Value="Include"/>
+      </Item266>
+      <Item267>
+        <Filename Value="../render/software/pf_rgb565_gamma.inc"/>
+        <Type Value="Include"/>
+      </Item267>
+      <Item268>
+        <Filename Value="../render/software/pf_rgb565_pre.inc"/>
+        <Type Value="Include"/>
+      </Item268>
+      <Item269>
+        <Filename Value="../render/software/pf_rgba32.inc"/>
+        <Type Value="Include"/>
+      </Item269>
+      <Item270>
+        <Filename Value="../render/software/pf_rgba32_pre.inc"/>
+        <Type Value="Include"/>
+      </Item270>
+      <Item271>
+        <Filename Value="../render/software/agg_pixfmt_bitbuf.pas"/>
+        <UnitName Value="agg_pixfmt_bitbuf"/>
+      </Item271>
     </Files>
     <LazDoc Paths="../../../docs/xml/corelib;../../../docs/xml/corelib/x11;../../../docs/xml/corelib/gdi;../../../docs/xml/gui"/>
     <RequiredPkgs Count="1">
