@@ -1,6 +1,4 @@
-{$IFNDEF QSYNREGEXPR}
 unit SynRegExpr;
-{$ENDIF}
 
 {
      TRegExpr class library
@@ -30,8 +28,8 @@ unit SynRegExpr;
     not be charged seperatly.
  4. Altered versions must be plainly marked as such, and must
     not be misrepresented as being the original software.
- 5. RegExp Studio application and all the visual components as 
-    well as documentation is not part of the TRegExpr library 
+ 5. RegExp Studio application and all the visual components as
+    well as documentation is not part of the TRegExpr library
     and is not free for usage.
 
                                     mailto:anso@mail.ru
@@ -45,19 +43,10 @@ interface
 
 {$IFDEF FPC}
   {$MODE Delphi}
-  {$DEFINE SYN_COMPILER_1_UP}
-  {$DEFINE SYN_COMPILER_2_UP}
-  {$DEFINE SYN_COMPILER_3_UP}
-  {$DEFINE SYN_COMPILER_4_UP}
-  {$DEFINE SYN_DELPHI_2_UP}
-  {$DEFINE SYN_DELPHI_3_UP}
-  {$DEFINE SYN_DELPHI_4_UP}
-  {$DEFINE SYN_DELPHI_5_UP}
-  {$DEFINE SYN_LAZARUS}
 {$ENDIF}
 
 // ======== Determine compiler
-{$IFDEF VER80} Sorry, TRegExpr is for 32-bits Delphi only. Delphi 1 is not supported (and whos really care today?!). {$ENDIF}
+{$IFDEF VER80} Sorry, TRegExpr is for 32-bits Delphi only. Delphi 1 is not supported (and who really cares today?!). {$ENDIF}
 {$IFDEF VER90} {$DEFINE D2} {$ENDIF} // D2
 {$IFDEF VER93} {$DEFINE D2} {$ENDIF} // CPPB 1
 {$IFDEF VER100} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D3
@@ -71,9 +60,6 @@ interface
 {$BOOLEVAL OFF}
 {$EXTENDEDSYNTAX ON}
 {$LONGSTRINGS ON}
-{$IFNDEF SYN_LAZARUS}
-{$OPTIMIZATION ON}
-{$ENDIF}
 {$IFDEF D6}
   {$WARN SYMBOL_PLATFORM OFF} // Suppress .Net warnings
 {$ENDIF}
@@ -81,11 +67,6 @@ interface
   {$WARN UNSAFE_CAST OFF} // Suppress .Net warnings
   {$WARN UNSAFE_TYPE OFF} // Suppress .Net warnings
   {$WARN UNSAFE_CODE OFF} // Suppress .Net warnings
-{$ENDIF}
-{$IFDEF FPC}
- {$IFNDEF SYN_LAZARUS}
- {$MODE DELPHI} // Delphi-compatible mode in FreePascal
- {$ENDIF}
 {$ENDIF}
 
 // ======== Define options for TRegExpr engine
@@ -96,7 +77,9 @@ interface
 {$ENDIF}
 {$DEFINE ComplexBraces} // support braces in complex cases
 {$IFNDEF UniCode} // the option applicable only for non-UniCode mode
+ {$IFNDEF FPC_REQUIRES_PROPER_ALIGNMENT}  //sets have to be aligned
  {$DEFINE UseSetOfChar} // Significant optimization by using set of char
+ {$ENDIF}
 {$ENDIF}
 {$IFDEF UseSetOfChar}
  {$DEFINE UseFirstCharSet} // Fast skip between matches for r.e. that starts with determined set of chars
@@ -139,8 +122,15 @@ type
 
 const
  REOpSz = SizeOf (TREOp) div SizeOf (REChar); // size of p-code in RegExprString units
- RENextOffSz = SizeOf (TRENextOff) div SizeOf (REChar); // size of Next 'pointer' -"-
+ {$IFDEF FPC_REQUIRES_PROPER_ALIGNMENT}
+ // add space for aligning pointer
+ // -1 is the correct max size but also needed for InsertOperator that needs a multiple of pointer size
+ RENextOffSz = (2 * SizeOf (TRENextOff) div SizeOf (REChar))-1;
+ REBracesArgSz = (2 * SizeOf (TREBracesArg) div SizeOf (REChar)); // add space for aligning pointer
+ {$ELSE}
+ RENextOffSz = (SizeOf (TRENextOff) div SizeOf (REChar)); // size of Next 'pointer' -"-
  REBracesArgSz = SizeOf (TREBracesArg) div SizeOf (REChar); // size of BRACES arguments -"-
+ {$ENDIF}
 
 type
  TRegExprInvertCaseFunction = function (const Ch : REChar) : REChar
@@ -331,16 +321,16 @@ type
     // insert an operator in front of already-emitted operand
     // Means relocating the operand.
 
-    function ParseReg (paren : integer; var flagp : integer) : PRegExprChar;
+    function ParseReg (paren : integer; out flagp : integer) : PRegExprChar;
     // regular expression, i.e. main body or parenthesized thing
 
-    function ParseBranch (var flagp : integer) : PRegExprChar;
+    function ParseBranch (out flagp : integer) : PRegExprChar;
     // one alternative of an | operator
 
-    function ParsePiece (var flagp : integer) : PRegExprChar;
+    function ParsePiece (out flagp : integer) : PRegExprChar;
     // something followed by possible [*+?]
 
-    function ParseAtom (var flagp : integer) : PRegExprChar;
+    function ParseAtom (out flagp : integer) : PRegExprChar;
     // the lowest level
 
     function GetCompilerErrorPos : PtrInt;
@@ -651,16 +641,6 @@ function RegExprSubExpressions (const ARegExpr : string;
 
 implementation
 
-{$IFDEF SYN_LAZARUS}
-{$ELSE}
-uses
-{$IFDEF SYN_WIN32}
- Windows; // CharUpper/Lower
-{$ELSE}
-  Libc; //Qt.pas from Borland does not expose char handling functions
-{$ENDIF}
-{$ENDIF}
-
 const
  TRegExprVersionMajor : integer = 0;
  TRegExprVersionMinor : integer = 952;
@@ -678,6 +658,24 @@ const
  {$ELSE}
  XIgnoredChars = [' ', #9, #$d, #$a];
  {$ENDIF}
+
+function AlignToPtr(const p: Pointer): Pointer;
+begin
+{$IFDEF FPC_REQUIRES_PROPER_ALIGNMENT}
+ Result := Align(p, SizeOf(Pointer));
+{$ELSE}
+ Result := p;
+{$ENDIF}
+end;
+
+function AlignToInt(const p: Pointer): Pointer;
+begin
+{$IFDEF FPC_REQUIRES_PROPER_ALIGNMENT}
+ Result := Align(p, SizeOf(integer));
+{$ELSE}
+ Result := p;
+{$ENDIF}
+end;
 
 {=============================================================}
 {=================== WideString functions ====================}
@@ -865,9 +863,11 @@ function RegExprSubExpressions (const ARegExpr : string;
             do inc (i);
            if i > Len
             then Result := -1 // unbalansed '('
-            else
-             if TRegExpr.ParseModifiersStr (System.Copy (ARegExpr, i, i - i0), Modif)
-              then AExtendedSyntax := (Modif and MaskModX) <> 0;
+            else begin
+             Modif := 0;
+             if TRegExpr.ParseModifiersStr (System.Copy (ARegExpr, i, i - i0), Modif) then
+               AExtendedSyntax := (Modif and MaskModX) <> 0;
+             end;
           end
          else begin // subexpression starts
            ASubExprs.Add (''); // just reserve space
@@ -1481,7 +1481,7 @@ procedure TRegExpr.Tail (p : PRegExprChar; val : PRegExprChar);
   UNTIL false;
   // Set Next 'pointer'
   if val < scan
-   then PRENextOff (scan + REOpSz)^ := - (scan - val) //###0.948
+   then PRENextOff (AlignToPtr(scan + REOpSz))^ := - (scan - val) //###0.948
    // work around PWideChar subtraction bug (Delphi uses
    // shr after subtraction to calculate widechar distance %-( )
    // so, if difference is negative we have .. the "feature" :(
@@ -1489,7 +1489,7 @@ procedure TRegExpr.Tail (p : PRegExprChar; val : PRegExprChar);
    // "P – Q computes the difference between the address given
    // by P (the higher address) and the address given by Q (the
    // lower address)" - Delphi help quotation.
-   else PRENextOff (scan + REOpSz)^ := val - scan; //###0.933
+   else PRENextOff (AlignToPtr(scan + REOpSz))^ := val - scan; //###0.933
  end; { of procedure TRegExpr.Tail
 --------------------------------------------------------------}
 
@@ -1510,7 +1510,7 @@ function TRegExpr.EmitNode (op : TREOp) : PRegExprChar; //###0.933
   if Result <> @regdummy then begin
      PREOp (regcode)^ := op;
      inc (regcode, REOpSz);
-     PRENextOff (regcode)^ := 0; // Next "pointer" := nil
+     PRENextOff (AlignToPtr(regcode))^ := 0; // Next "pointer" := nil
      inc (regcode, RENextOffSz);
      {$IFDEF DebugSynRegExpr}
      if regcode-programm>regsize then
@@ -1553,8 +1553,8 @@ procedure TRegExpr.InsertOperator (op : TREOp; opnd : PRegExprChar; sz : integer
   {$IFDEF DebugSynRegExpr}
   if regcode-programm>regsize then
     raise Exception.Create('TRegExpr.InsertOperator buffer overrun');
-  if (opnd<regcode) or (opnd-regcode>regsize) then
-    raise Exception.Create('TRegExpr.InsertOperator invalid opnd');
+//  if (opnd<regcode) or (opnd-regcode>regsize) then
+ //   raise Exception.Create('TRegExpr.InsertOperator invalid opnd');
   {$ENDIF}
   dst := regcode;
   while src > opnd do begin
@@ -1737,7 +1737,7 @@ function TRegExpr.CompileRegExpr (exp : PRegExprChar) : boolean;
  end; { of function TRegExpr.CompileRegExpr
 --------------------------------------------------------------}
 
-function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar;
+function TRegExpr.ParseReg (paren : integer; out flagp : integer) : PRegExprChar;
 // regular expression, i.e. main body or parenthesized thing
 // Caller must absorb opening parenthesis.
 // Combining parenthesis handling with the base level of regular expression
@@ -1822,7 +1822,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
  end; { of function TRegExpr.ParseReg
 --------------------------------------------------------------}
 
-function TRegExpr.ParseBranch (var flagp : integer) : PRegExprChar;
+function TRegExpr.ParseBranch (out flagp : integer) : PRegExprChar;
 // one alternative of an | operator
 // Implements the concatenation operator.
  var
@@ -1852,7 +1852,7 @@ function TRegExpr.ParseBranch (var flagp : integer) : PRegExprChar;
  end; { of function TRegExpr.ParseBranch
 --------------------------------------------------------------}
 
-function TRegExpr.ParsePiece (var flagp : integer) : PRegExprChar;
+function TRegExpr.ParsePiece (out flagp : integer) : PRegExprChar;
 // something followed by possible [*+?{]
 // Note that the branching code sequences used for ? and the general cases
 // of * and + and { are somewhat optimized:  they use the same NOTHING node as
@@ -1903,11 +1903,11 @@ function TRegExpr.ParsePiece (var flagp : integer) : PRegExprChar;
    if regcode <> @regdummy then begin
       off := (Result + REOpSz + RENextOffSz)
        - (regcode - REOpSz - RENextOffSz); // back to Atom after LOOPENTRY
-      PREBracesArg (regcode)^ := ABracesMin;
+      PREBracesArg (AlignToInt(regcode))^ := ABracesMin;
       inc (regcode, REBracesArgSz);
-      PREBracesArg (regcode)^ := ABracesMax;
+      PREBracesArg (AlignToInt(regcode))^ := ABracesMax;
       inc (regcode, REBracesArgSz);
-      PRENextOff (regcode)^ := off;
+      PRENextOff (AlignToPtr(regcode))^ := off;
       inc (regcode, RENextOffSz);
       {$IFDEF DebugSynRegExpr}
       if regcode-programm>regsize then
@@ -1929,12 +1929,13 @@ function TRegExpr.ParsePiece (var flagp : integer) : PRegExprChar;
     else TheOp := BRACES;
    InsertOperator (TheOp, Result, REOpSz + RENextOffSz + REBracesArgSz * 2);
    if regcode <> @regdummy then begin
-     PREBracesArg (Result + REOpSz + RENextOffSz)^ := ABracesMin;
-     PREBracesArg (Result + REOpSz + RENextOffSz + REBracesArgSz)^ := ABracesMax;
+     PREBracesArg (AlignToInt(Result + REOpSz + RENextOffSz))^ := ABracesMin;
+     PREBracesArg (AlignToInt(Result + REOpSz + RENextOffSz + REBracesArgSz))^ := ABracesMax;
     end;
   end;
 
  begin
+  flagp := WORST;
   Result := ParseAtom (flags);
   if Result = nil
    then EXIT;
@@ -2073,7 +2074,7 @@ function TRegExpr.ParsePiece (var flagp : integer) : PRegExprChar;
  end; { of function TRegExpr.ParsePiece
 --------------------------------------------------------------}
 
-function TRegExpr.ParseAtom (var flagp : integer) : PRegExprChar;
+function TRegExpr.ParseAtom (out flagp : integer) : PRegExprChar;
 // the lowest level
 // Optimization:  gobbles an entire sequence of ordinary characters so that
 // it can turn them into a single node, which is smaller to store and
@@ -2114,7 +2115,7 @@ function TRegExpr.ParseAtom (var flagp : integer) : PRegExprChar;
     do EmitC (s [i]);
   end;
 
- function HexDig (ch : REChar) : PtrInt;
+ function HexDig (ch : REChar) : PtrUInt;
   begin
    Result := 0;
    if (ch >= 'a') and (ch <= 'f')
@@ -2808,7 +2809,7 @@ function TRegExpr.regnext (p : PRegExprChar) : PRegExprChar;
     Result := nil;
     EXIT;
    end;
-  offset := PRENextOff (p + REOpSz)^; //###0.933 inlined NEXT
+  offset := PRENextOff (AlignToPtr(p + REOpSz))^; //###0.933 inlined NEXT
   if offset = 0
    then Result := nil
    else Result := p + offset;
@@ -2841,7 +2842,7 @@ function TRegExpr.MatchPrim (prog : PRegExprChar) : boolean;
   scan := prog;
 
   while scan <> nil do begin
-     len := PRENextOff (scan + 1)^; //###0.932 inlined regnext
+     len := PRENextOff (AlignToPtr(scan + 1))^; //###0.932 inlined regnext
      if len = 0
       then next := nil
       else next := scan + len;
@@ -3130,9 +3131,9 @@ function TRegExpr.MatchPrim (prog : PRegExprChar) : boolean;
              Error (reeLoopWithoutEntry);
              EXIT;
             end;
-           opnd := scan + PRENextOff (scan + REOpSz + RENextOffSz + 2 * REBracesArgSz)^;
-           BracesMin := PREBracesArg (scan + REOpSz + RENextOffSz)^;
-           BracesMax := PREBracesArg (scan + REOpSz + RENextOffSz + REBracesArgSz)^;
+           opnd := scan + PRENextOff (AlignToPtr(scan + REOpSz + RENextOffSz + 2 * REBracesArgSz))^;
+           BracesMin := PREBracesArg (AlignToInt(scan + REOpSz + RENextOffSz))^;
+           BracesMax := PREBracesArg (AlignToPtr(scan + REOpSz + RENextOffSz + REBracesArgSz))^;
            save := reginput;
            if LoopStack [LoopStackIdx] >= BracesMin then begin // Min alredy matched - we can work
               if scan^ = LOOP then begin
@@ -3196,8 +3197,8 @@ function TRegExpr.MatchPrim (prog : PRegExprChar) : boolean;
             else if (scan^ = PLUS) or (scan^ = PLUSNG)
              then BracesMin := 1 // PLUS
              else begin // BRACES
-               BracesMin := PREBracesArg (scan + REOpSz + RENextOffSz)^;
-               BracesMax := PREBracesArg (scan + REOpSz + RENextOffSz + REBracesArgSz)^;
+               BracesMin := PREBracesArg (AlignToPtr(scan + REOpSz + RENextOffSz))^;
+               BracesMax := PREBracesArg (AlignToPtr(scan + REOpSz + RENextOffSz + REBracesArgSz))^;
               end;
            save := reginput;
            opnd := scan + REOpSz + RENextOffSz;
@@ -3217,7 +3218,7 @@ function TRegExpr.MatchPrim (prog : PRegExprChar) : boolean;
                 // If it could work, try it.
                 if (nextch = #0) or (reginput^ = nextch) then begin
                   {$IFDEF ComplexBraces}
-                  System.Move (LoopStack, SavedLoopStack, SizeOf (LoopStack)); //###0.925
+                  System.Move (LoopStack, SavedLoopStack{%H-}, SizeOf (LoopStack)); //###0.925
                   SavedLoopStackIdx := LoopStackIdx;
                   {$ENDIF}
                   if MatchPrim (next) then begin
@@ -3377,8 +3378,8 @@ procedure TRegExpr.FillFirstCharSet (prog : PRegExprChar);
            EXIT;
           end;
          LOOP, LOOPNG: begin //###0.940
-           opnd := scan + PRENextOff (scan + REOpSz + RENextOffSz + REBracesArgSz * 2)^;
-           min_cnt := PREBracesArg (scan + REOpSz + RENextOffSz)^;
+           opnd := scan + PRENextOff (AlignToPtr(scan + REOpSz + RENextOffSz + REBracesArgSz * 2))^;
+           min_cnt := PREBracesArg (AlignToPtr(scan + REOpSz + RENextOffSz))^;
            FillFirstCharSet (opnd);
            if min_cnt = 0
             then FillFirstCharSet (next);
@@ -3393,7 +3394,7 @@ procedure TRegExpr.FillFirstCharSet (prog : PRegExprChar);
           end;
          BRACES, BRACESNG: begin //###0.940
            opnd := scan + REOpSz + RENextOffSz + REBracesArgSz * 2;
-           min_cnt := PREBracesArg (scan + REOpSz + RENextOffSz)^; // BRACES
+           min_cnt := PREBracesArg (AlignToPtr(scan + REOpSz + RENextOffSz))^; // BRACES
            FillFirstCharSet (opnd);
            if min_cnt > 0
             then EXIT;
@@ -3942,7 +3943,7 @@ function TRegExpr.Replace (AInputStr : RegExprString;
       AReplaceFunc : TRegExprReplaceFunction)
      : RegExprString;
  begin
-  {$IFDEF SYN_LAZARUS}Result:={$ENDIF}ReplaceEx (AInputStr, AReplaceFunc);
+  Result := ReplaceEx (AInputStr, AReplaceFunc);
  end; { of function TRegExpr.Replace
 --------------------------------------------------------------}
 {$ENDIF}
@@ -4071,14 +4072,14 @@ function TRegExpr.Dump : RegExprString;
      {$ENDIF}
      if (op = BRACES) or (op = BRACESNG) then begin //###0.941
        // show min/max argument of BRACES operator
-       Result := Result + Format ('{%d,%d}', [PREBracesArg (s)^, PREBracesArg (s + REBracesArgSz)^]);
+       Result := Result + Format ('{%d,%d}', [PREBracesArg (AlignToInt(s))^, PREBracesArg (AlignToInt(s + REBracesArgSz))^]);
        inc (s, REBracesArgSz * 2);
       end;
      {$IFDEF ComplexBraces}
      if (op = LOOP) or (op = LOOPNG) then begin //###0.940
        Result := Result + Format (' -> (%d) {%d,%d}', [
-        (s - programm - (REOpSz + RENextOffSz)) + PRENextOff (s + 2 * REBracesArgSz)^,
-        PREBracesArg (s)^, PREBracesArg (s + REBracesArgSz)^]);
+        (s - programm - (REOpSz + RENextOffSz)) + PRENextOff (AlignToPtr(s + 2 * REBracesArgSz))^,
+        PREBracesArg (AlignToInt(s))^, PREBracesArg (AlignToInt(s + REBracesArgSz))^]);
        inc (s, 2 * REBracesArgSz + RENextOffSz);
       end;
      {$ENDIF}

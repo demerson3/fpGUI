@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2011 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -64,6 +64,7 @@ Type
   private
     FPopupMenu: TfpgPopupMenu;
     FScrollDistance: integer;
+    FBorderStyle: TfpgEditBorderStyle;
     procedure   FVScrollbarScroll(Sender: TObject; position: integer);
     procedure   FHScrollbarScroll(Sender: TObject; position: integer);
     procedure   ShowDefaultPopupMenu(const x, y: integer; const shiftstate: TShiftState); virtual;
@@ -76,6 +77,7 @@ Type
     Procedure   DebugMIClick( Sender: TObject );
     Procedure   DefaultMenuPopup( Sender: TObject );
     procedure   SetScrollDistance(const AValue: integer);
+    procedure SetBorderStyle(AValue: TfpgEditBorderStyle);
   protected
     FFontManager: TCanvasFontManager;
     FRichTextSettings: TRichTextSettings;
@@ -271,10 +273,10 @@ Type
     Procedure SetImages( AImages: TfpgImageList );
     Procedure Notification( AComponent: TComponent;
                             Operation: TOperation ); override;
-  Public
+  public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; Override;
-    // rect (of component) minus frame borders - normally 2 pixels all round
+    // rect (of component) minus frame borders
     function    GetClientRect: TfpgRect; override;
     procedure   AddText( Text: PChar; ADelay: boolean = False );
     procedure   AddParagraph( Text: PChar );
@@ -366,6 +368,7 @@ Type
   published
     property Align;
     property BackgroundColor default clBoxColor;
+    property BorderStyle: TfpgEditBorderStyle read FBorderStyle write SetBorderStyle default ebsDefault;
     //property ParentColor;
     //property ParentFont;
     //property ParentPenColor;
@@ -376,7 +379,7 @@ Type
     Property Focusable;
     property Visible;
     property RichTextSettings: TRichTextSettings read FRichTextSettings;
-    property ScrollBarWidth: longint read FScrollBarWidth write SetScrollBarWidth default 15;
+    property ScrollBarWidth: longint read FScrollBarWidth write SetScrollBarWidth default 16;
     property SmoothScroll: boolean read FSmoothScroll write FSmoothScroll;
     property ScrollDistance: integer read FScrollDistance write SetScrollDistance default 75;
     property UseDefaultMenu: boolean read FUseDefaultMenu write FUseDefaultMenu default True;
@@ -610,6 +613,14 @@ begin
     FHScrollBar.ScrollStep := FScrollDistance;
 end;
 
+procedure TRichTextView.SetBorderStyle(AValue: TfpgEditBorderStyle);
+begin
+  if FBorderStyle = AValue then
+    Exit;
+  FBorderStyle := AValue;
+  Repaint;
+end;
+
 constructor TRichTextView.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
@@ -617,11 +628,12 @@ begin
   FWidth := 150;
   FHeight := 70;
   FFocusable := True;
+  FBorderStyle := ebsDefault;
 
   FNeedVScroll := False;
   FNeedHScroll := False;
   FSmoothScroll := True;
-  FScrollbarWidth := 15;
+  FScrollbarWidth := 16;
   FUseDefaultMenu := True;
   FDebug          := False;
   FLayoutRequired := True;
@@ -654,7 +666,8 @@ Var
   CornerRect: TfpgRect;
   TextRect: TfpgRect;
   DrawRect: TfpgRect;
-  x: integer;
+  rect: TRect;
+  x, y: integer;
 
   // Just for fun! :-)
   procedure DesignerPainting(const AText: string; AColor: TfpgColor; AFontDesc: TfpgString = '');
@@ -679,7 +692,7 @@ begin
   Canvas.ClearClipRect;
   DrawBorder;
   DrawRect := GetDrawRect;
-  Canvas.Color := BackgroundColor;
+  Canvas.Color := RichTextSettings.DefaultBackgroundColor;
   Canvas.FillRectangle(DrawRect);
 
   TextRect := GetTextAreaRect;
@@ -703,7 +716,9 @@ begin
   if Length(FText) = 0 then
     exit;   // no need to paint anything further.
 
-  Assert(FLayout <> nil, 'FLayout may not be nil at this point!');
+  if FLayoutRequired then
+    // we haven't yet done a layout
+    Layout;
   if not Debug then
     Draw( 0, FLayout.FNumLines )
   else
@@ -712,9 +727,27 @@ begin
 
   if FHScrollbar.Visible and FVScrollbar.Visible then
   begin
+    case BorderStyle of
+      ebsNone:
+        begin
+          x := 0;
+          y := 0;
+        end;
+      ebsDefault:
+        begin
+          rect := fpgStyle.GetControlFrameBorders;
+          x := rect.Right;
+          y := rect.Bottom;
+        end;
+      ebsSingle:
+        begin
+          x := 1;
+          y := 1;
+        end;
+    end;
     // blank out corner between scrollbars
-    CornerRect.Left := Width - 2 - FScrollBarWidth;
-    CornerRect.Top := Height - 2 - FScrollBarWidth;
+    CornerRect.Left := Width - x - FScrollBarWidth;
+    CornerRect.Top := Height - y - FScrollBarWidth;
     CornerRect.Width := FScrollBarWidth;
     CornerRect.Height := FScrollBarWidth;
     Canvas.Color := clWindowBackground;
@@ -1004,24 +1037,17 @@ end;
 
 procedure TRichTextView.UpdateScrollBarCoords;
 var
-  HWidth: integer;
-  VHeight: integer;
+  r: TfpgRect;
 begin
-  VHeight := Height - 4;
-  HWidth  := Width - 4;
+  r := GetDrawRect; // this includes borders and scrollbars
 
-  if FVScrollBar.Visible then
-    Dec(HWidth, FScrollbarWidth);
-  if FHScrollBar.Visible then
-    Dec(VHeight, FScrollbarWidth);
+  FHScrollBar.Top     := r.Bottom+1;
+  FHScrollBar.Left    := r.Left;
+  FHScrollBar.Width   := r.Width;
 
-  FHScrollBar.Top     := Height - 2 - FScrollbarWidth;
-  FHScrollBar.Left    := 2;
-  FHScrollBar.Width   := HWidth;
-
-  FVScrollBar.Top     := 2;
-  FVScrollBar.Left    := Width - 2 - FScrollbarWidth;
-  FVScrollBar.Height  := VHeight;
+  FVScrollBar.Top     := r.Top;
+  FVScrollBar.Left    := r.Right+1;
+  FVScrollBar.Height  := r.Height;
 
   FVScrollBar.UpdateWindowPosition;
   FHScrollBar.UpdateWindowPosition;
@@ -1138,12 +1164,27 @@ begin
                                Link );
 end;
 
-Procedure TRichTextView.DrawBorder;
+procedure TRichTextView.DrawBorder;
 var
-  Rect: TfpgRect;
+  r: TfpgRect;
 begin
-  Canvas.GetWinRect(Rect);
-  Canvas.DrawControlFrame(Rect);
+//  Canvas.GetWinRect(Rect);
+  r.SetRect(0, 0, Width, Height);
+  case BorderStyle of
+    ebsNone:
+        begin
+          // do nothing
+        end;
+    ebsDefault:
+        begin
+          Canvas.DrawControlFrame(r);
+        end;
+    ebsSingle:
+        begin
+          Canvas.SetColor(clShadow2);
+          Canvas.DrawRectangle(r);
+        end;
+  end;
 end;
 
 Procedure TRichTextView.Draw( StartLine, EndLine: longint );
@@ -1209,7 +1250,7 @@ end;
 Function TRichTextView.GetTextAreaRect: TfpgRect;
 begin
   Result := GetDrawRect;
-  InflateRect(Result, -2, -2);
+//  InflateRect(Result, -2, -2);
 end;
 
 function TRichTextView.GetTextAreaHeight: longint;
@@ -2852,10 +2893,25 @@ begin
 end;
 
 function TRichTextView.GetClientRect: TfpgRect;
+var
+  r: TRect;
 begin
-  // Standard border of 2px on all sides
   Result.SetRect(0, 0, Width, Height);
-  InflateRect(Result, -2, -2);
+  case BorderStyle of
+    ebsNone:
+        begin
+          // do nothing
+        end;
+    ebsDefault:
+        begin
+          r := fpgStyle.GetControlFrameBorders;
+          InflateRect(Result, -r.Left, -r.Top);  { assuming borders are even on opposite sides }
+        end;
+    ebsSingle:
+        begin
+          InflateRect(Result, -1, -1);
+        end;
+  end;
 end;
 
 

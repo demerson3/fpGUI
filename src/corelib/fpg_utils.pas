@@ -63,11 +63,13 @@ function fpgExtractFileDir(const FileName: TfpgString): TfpgString;
 function fpgExtractFilePath(const FileName: TfpgString): TfpgString;
 function fpgExtractFileName(const FileName: TfpgString): TfpgString;
 function fpgExtractFileExt(const FileName: TfpgString): TfpgString;
+function fpgExtractRelativepath(const ABaseName, ADestName: TfpgString): TfpgString;
 function fpgForceDirectories(const ADirectory: TfpgString): Boolean;
 function fpgChangeFileExt(const FileName, Extension: TfpgString): TfpgString;
 function fpgGetAppConfigDir(const Global: Boolean): TfpgString;
 function fpgGetAppConfigFile(const Global: Boolean; const SubDir: Boolean): TfpgString;
 function fpgGetExecutableName: TfpgString;
+function fpgRenameFile(const OldName, NewName: TfpgString): Boolean;
 
 
 implementation
@@ -163,6 +165,11 @@ begin
   Result := ExtractFileExt(fpgToOSEncoding(Filename));
 end;
 
+function fpgExtractRelativepath(const ABaseName, ADestName: TfpgString): TfpgString;
+begin
+  Result := ExtractRelativepath(fpgToOSEncoding(ABaseName), fpgToOSEncoding(ADestName));
+end;
+
 function fpgForceDirectories(const ADirectory: TfpgString): Boolean;
 begin
   Result := ForceDirectories(fpgToOSEncoding(ADirectory));
@@ -186,6 +193,11 @@ end;
 function fpgGetExecutableName: TfpgString;
 begin
   Result := fpgChangeFileExt(fpgExtractFileName(Paramstr(0)), '');
+end;
+
+function fpgRenameFile(const OldName, NewName: TfpgString): Boolean;
+begin
+  Result := RenameFile(fpgToOSEncoding(OldName), fpgToOSEncoding(NewName));
 end;
 
 function fpgAppendPathDelim(const Path: TfpgString): TfpgString;

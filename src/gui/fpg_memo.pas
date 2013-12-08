@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2010 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -70,7 +70,6 @@ type
     procedure   RecalcLongestLine;
     procedure   DeleteSelection;
     procedure   DoCopy;
-    procedure   DoPaste(const AText: TfpgString);
     procedure   AdjustCursor;
     function    LineCount: integer;
     function    GetLineText(linenum: integer): string;
@@ -96,11 +95,12 @@ type
     procedure   SetReadOnly(const AValue: Boolean);
     procedure   ResetSelectionVariables;
     procedure   SetCursorPos(const AValue: integer);
+    function    GetSelectionText: TfpgString;
+    procedure   SetSelectionText(const AText: TfpgString);
   protected
     procedure   HandleKeyChar(var AText: TfpgChar; var shiftstate: TShiftState; var consumed: boolean); override;
     procedure   HandleKeyPress(var keycode: word; var shiftstate: TShiftState; var consumed: boolean); override;
     procedure   HandleLMouseDown(x, y: integer; shiftstate: TShiftState); override;
-    procedure   HandleRMouseDown(x, y: integer; shiftstate: TShiftState); override;
     procedure   HandleRMouseUp(x, y: integer; shiftstate: TShiftState); override;
     procedure   HandleMouseMove(x, y: integer; btnstate: word; shiftstate: TShiftState); override;
     procedure   HandleResize(dwidth, dheight: integer); override;
@@ -115,7 +115,6 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
     procedure   UpdateScrollBars;
-    function    SelectionText: TfpgString;
     procedure   CopyToClipboard;
     procedure   CutToClipboard;
     procedure   PasteFromClipboard;
@@ -131,6 +130,7 @@ type
     property    Text: TfpgString read GetText write SetText;
     property    UseTabs: boolean read FUseTabs write FUseTabs default False;
     property    PopupMenu: TfpgPopupMenu read FPopupMenu write FPopupMenu;
+    Property    SelectionText : TfpgString Read GetSelectionText Write SetSelectionText;
   published
     property    Align;
     property    BackgroundColor default clBoxColor;
@@ -176,10 +176,9 @@ type
   // custom stringlist that will notify the memo of item changes
   TfpgMemoStrings = class(TStringList)
   protected
-    Memo: TfpgMemo;
+    Memo: TfpgMemo;  { this is just a reference }
   public
     constructor Create(AMemo: TfpgMemo); reintroduce;
-    destructor  Destroy; override;
     function    Add(const s: String): Integer; override;
     procedure   Clear; override;
     procedure   Delete(Index: Integer); override;
@@ -192,12 +191,6 @@ constructor TfpgMemoStrings.Create(AMemo: TfpgMemo);
 begin
   inherited Create;
   Memo := AMemo;
-end;
-
-destructor TfpgMemoStrings.Destroy;
-begin
-  Memo := nil;
-  inherited Destroy;
 end;
 
 function TfpgMemoStrings.Add(const s: String): Integer;
@@ -223,9 +216,11 @@ end;
 
 procedure TfpgMemoStrings.Clear;
 begin
-  Memo.BeginUpdate;
+  if Assigned(Memo) then
+    Memo.BeginUpdate;
   inherited Clear;
-  Memo.EndUpdate;
+  if Assigned(Memo) then
+    Memo.EndUpdate;
 end;
 
 
@@ -359,7 +354,7 @@ begin
     Exit;
   s := fpgShowCharMap;
   if s <> '' then
-    DoPaste(s);
+    SetSelectionText(s);
 end;
 
 procedure TfpgMemo.SetDefaultPopupMenuItemsState;
@@ -616,7 +611,7 @@ begin
   fpgClipboard.Text := SelectionText;
 end;
 
-procedure TfpgMemo.DoPaste(const AText: TfpgString);
+procedure TfpgMemo.SetSelectionText(const AText: TfpgString);
 var
   s: TfpgString;
   si: TfpgString;       { beginning of line to cursor }
@@ -1119,7 +1114,7 @@ begin
         end;
     ckPaste:
         begin
-          DoPaste(fpgClipboard.Text);
+          SetSelectionText(fpgClipboard.Text);
           if not ReadOnly then
             hasChanged := True;
         end;
@@ -1402,15 +1397,6 @@ begin
   Repaint;
 end;
 
-procedure TfpgMemo.HandleRMouseDown(x, y: integer; shiftstate: TShiftState);
-begin
-  // keyMenu was pressed
-  if shiftstate = [ssExtra1] then
-    HandleRMouseUp(x, y, [])
-  else
-    inherited HandleRMouseDown(x, y, shiftstate);
-end;
-
 procedure TfpgMemo.HandleRMouseUp(x, y: integer; shiftstate: TShiftState);
 begin
   inherited HandleRMouseUp(x, y, shiftstate);
@@ -1581,7 +1567,7 @@ begin
   end;
 end;
 
-function TfpgMemo.SelectionText: TfpgString;
+function TfpgMemo.GetSelectionText: TfpgString;
 var
   n: integer;
   selsl: integer;
@@ -1593,6 +1579,12 @@ var
   st: integer;
   s: TfpgString;
 begin
+  if FSelEndLine = -1 then { no text is selected }
+  begin
+    Result := '';
+    Exit;
+  end;
+
   if (FSelStartLine shl 16) + FSelStartPos <= (FSelEndLine shl 16) + FSelEndPos then
   begin
     selsl := FSelStartLine;
@@ -1648,7 +1640,7 @@ end;
 
 procedure TfpgMemo.PasteFromClipboard;
 begin
-  DoPaste(fpgClipboard.Text);
+  SetSelectionText(fpgClipboard.Text);
 end;
 
 procedure TfpgMemo.Clear;

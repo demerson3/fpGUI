@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2010 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -450,10 +450,18 @@ end;
 procedure TfpgMessageBox.FormKeyPressed(Sender: TObject; var KeyCode: word;
   var ShiftState: TShiftState; var Consumed: boolean);
 begin
-  if KeyCode = keyEscape then
-  begin
-    Consumed := False;
-    Close;
+  case CheckClipBoardKey(keycode, shiftstate) of
+    ckCopy:
+        begin
+          fpgClipboard.Text := FLines.Text;
+          Consumed := True;
+        end;
+  else
+    if KeyCode = keyEscape then
+    begin
+      Consumed := True;
+      Close;
+    end;
   end;
 end;
 
@@ -1083,7 +1091,7 @@ begin
   grid := TfpgFileGrid.Create(self);
   with grid do
   begin
-    SetPosition(8, 44, 622, 200);
+    SetPosition(8, 44, 624, 202);
     Anchors := [anLeft, anRight, anTop, anBottom];
     Options := [go_AlternativeColor, go_SmoothScroll];
     OnRowChange := @ListChanged;
@@ -1168,7 +1176,7 @@ begin
   with pnlFileInfo do
   begin
     Name := 'pnlFileInfo';
-    SetPosition(8, 253, 622, 25);
+    SetPosition(8, 253, 624, 25);
     Anchors := [anLeft, anRight, anBottom];
     Alignment := taLeftJustify;
     Margin := 4;
@@ -1179,7 +1187,7 @@ begin
   edFilename := TfpgEdit.Create(self);
   with edFilename do
   begin
-    SetPosition(8, 301, 622, 22);
+    SetPosition(8, 301, 624, 22);
     Anchors := [anLeft, anRight, anBottom];
     Text := '';
     FontDesc := '#Edit1';
@@ -1192,7 +1200,7 @@ begin
   chlFilter := TfpgComboBox.Create(self);
   with chlFilter do
   begin
-    SetPosition(8, 345, 622, 22);
+    SetPosition(8, 345, 624, 22);
     Anchors := [anLeft, anRight, anBottom];
     FontDesc := '#List';
     OnChange := @FilterChange;
@@ -1201,7 +1209,7 @@ begin
   lb1 := TfpgLabel.Create(self);
   with lb1 do
   begin
-    SetPosition(8, 283, 622, 16);
+    SetPosition(8, 283, 624, 16);
     Anchors := [anLeft, anBottom];
     Text := fpgAddColon(rsFileName);
     FontDesc := '#Label1';
@@ -1210,7 +1218,7 @@ begin
   lb2 := TfpgLabel.Create(self);
   with lb2 do
   begin
-    SetPosition(8, 327, 622, 16);
+    SetPosition(8, 327, 624, 16);
     Anchors := [anLeft, anBottom];
     Text := fpgAddColon(rsFileType);
     FontDesc := '#Label1';

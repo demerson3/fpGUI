@@ -7,9 +7,6 @@ interface
 uses
   Classes, SysUtils, fpg_base;
 
-const
-  OWN_HELP_MARKER = '[DOCVIEWHELP]';
-
 
 function GetOwnHelpFileName: String;
 // Given a filename, which may or may not contain a path or extension,
@@ -166,6 +163,7 @@ begin
       Exit;
     end;
   end;
+  fl.Free;
 end;
 
 

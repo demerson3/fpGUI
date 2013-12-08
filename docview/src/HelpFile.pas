@@ -192,13 +192,11 @@ uses
 //  ACLLanguageUnit;
   fpg_main
   ,fpg_utils
+  ,fpg_stringutils
   ,nvUtilities
   ,ACLStringUtility
   ;
 
-// Load "missing" bitmap
-{ TODO -oGraeme -cbitmap : Create and load a "missing image"  image }
-{.$R Images}
 
 const
   FileErrorNotFound = 'File not found ';
@@ -323,29 +321,6 @@ const
     entries.AddObject(anIndexEntry.getLabel, anIndexEntry);
   end;
 
-
-
-
-//Procedure OnLanguageEvent( Language: TLanguageFile;
-//                           const Apply: boolean );
-//var
-//  tmpPrefix : String;
-//begin
-//  tmpPrefix := 'HelpFile' + LANGUAGE_LABEL_DELIMITER;
-//
-//  Language.LL( Apply, FileErrorNotFound, tmpPrefix + 'FileErrorNotFound', 'File not found' );
-//  Language.LL( Apply, FileErrorAccessDenied, tmpPrefix + 'FileErrorAccessDenied', 'Access denied' );
-//  Language.LL( Apply, FileErrorInUse, tmpPrefix + 'FileErrorInUse', 'File in use by another program' );
-//  Language.LL( Apply,
-//               FileErrorInvalidHeader,
-//               tmpPrefix + 'FileErrorInvalidHeader',
-//               'File doesn''t appear to be an OS/2 Help document (header ID not correct)' );
-//  Language.LL( Apply,
-//               ErrorCorruptHelpFile,
-//               tmpPrefix + 'ErrorCorruptHelpFile',
-//               'File is corrupt' );
-//end;
-
 Function TopicFile( Topic: TTopic ): THelpFile;
 Begin
   Result := Topic.HelpFile as THelpFile;
@@ -393,6 +368,10 @@ end;
 
 
 constructor THelpFile.Create(const aFileName: string);
+var
+  i: integer;
+  lText: string;
+  lTopic: TTopic;
 begin
   LogEvent(LogObjConstDest, 'THelpFile.Create (file:' + aFileName + ')');
   LogEvent(LogParse, 'Helpfile Load: ' + aFileName);
@@ -411,6 +390,22 @@ begin
     ReadFontTableData;
     ParseFontTable;
     ReadReferencedFilesTable;
+    
+    // Fix text encoding
+    for i := 0 to TopicCount-1 do
+    begin
+      lText := TTopic(TopicList[i]).Title;
+      // apply encoding conversion
+      case Encoding of
+        encUTF8:      lText := IPFToUTF8(lText);
+        encCP437:     lText := CP437ToUTF8(lText);
+        encCP850:     lText := CP850ToUTF8(lText);
+        encIBMGraph:  lText := IBMGraphToUTF8(lText);
+      else
+        lText := IPFToUTF8(lText);
+      end;
+      TTopic(TopicList[i]).Title := lText;
+    end;
   except
     Close;
     raise;
@@ -584,6 +579,7 @@ begin
                             _FontTable,
                             _ReferencedFiles );
 
+        
     Topic.HelpFile := Self;
     Topic.Index := EntryIndex;
 
@@ -667,6 +663,7 @@ var
   pEnd: pByte;
   pIndexData: pointer;
   tmpIndexEntry: TIndexEntry;
+  lText: string;
 begin
   LogEvent(LogParse, 'Read index');
   _Index := TIndex.Create;
@@ -696,6 +693,16 @@ begin
 
     if pEntryHeader^.TOCIndex < _Topics.Count then
     begin
+      // apply encoding conversion
+      case Encoding of
+        encUTF8:      lText := IPFToUTF8(EntryText);
+        encCP437:     lText := CP437ToUTF8(EntryText);
+        encCP850:     lText := CP850ToUTF8(EntryText);
+        encIBMGraph:  lText := IBMGraphToUTF8(EntryText);
+      else
+        lText := IPFToUTF8(EntryText);
+      end;
+      EntryText := lText;
       tmpIndexEntry := TIndexEntry.Create(EntryText, TTopic(_Topics[pEntryHeader^.TOCIndex]), pEntryHeader^.flags);
       _Index.Add(tmpIndexEntry);
     end
@@ -1089,9 +1096,7 @@ begin
                                          + ': '
                                          + e.Message );}
       begin
-//        Bitmap := THelpBitmap.Create;
         Bitmap := THelpBitmap(fpgImages.GetImage('stdimg.dlg.critical'));
-//        Bitmap.LoadFromResourceName( 'MissingBitmap' );  // TODO: Add image resource to DocView
       end;
     end;
 

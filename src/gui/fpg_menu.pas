@@ -135,6 +135,7 @@ type
     destructor  Destroy; override;
     procedure   Close; override;
     function    AddMenuItem(const AMenuName: TfpgString; const hotkeydef: string; OnClickProc: TNotifyEvent): TfpgMenuItem;
+    procedure   AddSeparator;
     function    MenuItemByName(const AMenuName: TfpgString): TfpgMenuItem;
     function    MenuItem(const AMenuPos: integer): TfpgMenuItem;  // added to allow for localization
     property    BeforeShow: TNotifyEvent read FBeforeShow write FBeforeShow;
@@ -1024,8 +1025,6 @@ procedure TfpgPopupMenu.HandlePaint;
 var
   n: integer;
 begin
-  Canvas.BeginDraw;
-//  inherited HandlePaint;
   Canvas.Clear(BackgroundColor);
 //  Canvas.SetColor(clBlack);
 //  Canvas.DrawRectangle(0, 0, Width, Height);  // black rectangle border
@@ -1033,8 +1032,6 @@ begin
 
   for n := 0 to VisibleCount-1 do
     DrawRow(n, n = FFocusItem);
-
-  Canvas.EndDraw;
 end;
 
 procedure TfpgPopupMenu.HandleShow;
@@ -1408,6 +1405,11 @@ begin
   begin
     result.Separator := true;
   end;
+end;
+
+procedure TfpgPopupMenu.AddSeparator;
+begin
+  AddMenuitem('-', '', nil);
 end;
 
 function TfpgPopupMenu.MenuItemByName(const AMenuName: TfpgString): TfpgMenuItem;

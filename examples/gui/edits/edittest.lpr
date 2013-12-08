@@ -34,6 +34,8 @@ type
     rbComma: TfpgRadioButton;
     chbSpace: TfpgCheckBox;
     chbFloatDec: TfpgCheckBox;
+    chbFloatFixDec: TfpgCheckBox;
+    chbLimit: TfpgCheckBox;
     lbNegativeColor: TfpgColorListBox;
     lblNegativeColor: TfpgLabel;
     {@VFD_HEAD_END: MainForm}
@@ -46,6 +48,8 @@ type
     procedure chbPasswdChanged(Sender: TObject);
     procedure chbSpaceChange(Sender: TObject);
     procedure chbFloatDecChange(Sender: TObject);
+    procedure chbFloatFixDecChange(Sender: TObject);
+    procedure chbLimitChange(Sender: TObject);
   public
     procedure AfterCreate; override;
   end;
@@ -105,11 +109,13 @@ procedure TMainForm.lbChange(Sender: TObject);
 begin
   edtFloat.NegativeColor := lbNegativeColor.Color;
   edtInteger.NegativeColor := lbNegativeColor.Color;
+  edtCurrency.NegativeColor := lbNegativeColor.Color;
 end;
 
 procedure TMainForm.edtIntegerChange(Sender: TObject);
 begin
   l_integervalue.Text := IntToStr(edtInteger.Value);
+  edtInteger.TextColor:= clBlue;
 end;
 
 procedure TMainForm.edtFloatChange(Sender: TObject);
@@ -155,17 +161,54 @@ end;
 procedure TMainForm.chbFloatDecChange(Sender: TObject);
 begin
   if chbFloatDec.Checked then
-    edtFloat.Decimals := 3
+  begin
+    edtFloat.Decimals := 3;
+    chbFloatFixDec.Checked:= False;
+  end
   else
     edtFloat.Decimals := -1;
+end;
+
+procedure TMainForm.chbFloatFixDecChange(Sender: TObject);
+begin
+  if chbFloatFixDec.Checked then
+  begin
+    edtFloat.FixedDecimals := 3;
+    chbFloatDec.Checked:= False;
+  end
+  else
+    edtFloat.FixedDecimals := -1;
+end;
+
+procedure TMainForm.chbLimitChange(Sender: TObject);
+begin
+  if chbLimit.Checked then
+  begin
+    edtInteger.MaxValue:= 5000;
+    edtInteger.MinValue:= -1000;
+    edtFloat.MaxValue:= 5000;
+    edtFloat.MinValue:= -1000;
+    edtCurrency.MaxValue:= 5000;
+    edtCurrency.MinValue:= -1000;
+  end
+  else
+  begin
+    edtInteger.MaxLimit:= False;
+    edtInteger.MinLimit:= False;
+    edtFloat.MaxLimit:= False;
+    edtFloat.MinLimit:= False;
+    edtCurrency.MaxLimit:= False;
+    edtCurrency.MinLimit:= False;
+  end;
 end;
 
 procedure TMainForm.AfterCreate;
 begin
   {@VFD_BODY_BEGIN: MainForm}
   Name := 'MainForm';
-  SetPosition(376, 202, 392, 300);
+  SetPosition(376, 202, 392, 310);
   WindowTitle := 'Edit components';
+  Hint := '';
   WindowPosition := wpScreenCenter;
 
   lblName1 := TfpgLabel.Create(self);
@@ -183,9 +226,11 @@ begin
   begin
     Name := 'edtText';
     SetPosition(24, 28, 120, 22);
+    ExtraHint := '';
+    FontDesc := '#Edit1';
+    Hint := '';
     TabOrder := 1;
     Text := 'Hello World!';
-    FontDesc := '#Edit1';
   end;
 
   chbPasswd := TfpgCheckBox.Create(self);
@@ -194,6 +239,7 @@ begin
     Name := 'chbPasswd';
     SetPosition(24, 55, 152, 20);
     FontDesc := '#Label1';
+    Hint := '';
     TabOrder := 2;
     Text := 'Password Mode';
     OnChange := @chbPasswdChanged;
@@ -264,8 +310,9 @@ begin
   begin
     Name := 'edtInteger';
     SetPosition(24, 108, 120, 22);
-    TabOrder := 9;
     FontDesc := '#Edit1';
+    Hint := '';
+    TabOrder := 9;
     Value := 12345;
     OnChange := @edtIntegerChange;
   end;
@@ -275,8 +322,10 @@ begin
   begin
     Name := 'edtFloat';
     SetPosition(24, 164, 120, 22);
-    TabOrder := 10;
     FontDesc := '#Edit1';
+    Hint := '';
+    TabOrder := 10;
+    FixedDecimals := 4;
     Value := 12345.1234;
     OnChange := @edtFloatChange;
   end;
@@ -286,8 +335,9 @@ begin
   begin
     Name := 'edtCurrency';
     SetPosition(24, 220, 120, 22);
-    TabOrder := 11;
     FontDesc := '#Edit1';
+    Hint := '';
+    TabOrder := 11;
     Value := 12345.12;
     OnChange := @edtCurrencyChange;
   end;
@@ -296,7 +346,7 @@ begin
   with btnQuit do
   begin
     Name := 'btnQuit';
-    SetPosition(296, 260, 75, 24);
+    SetPosition(296, 270, 75, 24);
     Anchors := [anRight,anBottom];
     Text := 'Quit';
     FontDesc := '#Label1';
@@ -314,6 +364,7 @@ begin
     Checked := True;
     FontDesc := '#Label1';
     GroupIndex := 1;
+    Hint := '';
     TabOrder := 7;
     Text := 'Point as DecimalSeparator';
     Tag := 0;
@@ -324,9 +375,10 @@ begin
   with rbComma do
   begin
     Name := 'rbComma';
-    SetPosition(170, 160, 196, 20);
+    SetPosition(170, 160, 210, 20);
     FontDesc := '#Label1';
     GroupIndex := 1;
+    Hint := '';
     TabOrder := 8;
     Text := 'Comma as DecimalSeparator';
     Tag := 1;
@@ -337,8 +389,9 @@ begin
   with chbSpace do
   begin
     Name := 'chbSpace';
-    SetPosition(170, 200, 200, 20);
+    SetPosition(170, 180, 210, 20);
     FontDesc := '#Label1';
+    Hint := '';
     TabOrder := 15;
     Text := 'Space as ThousandSeparator';
     OnChange := @chbSpaceChange;
@@ -348,11 +401,36 @@ begin
   with chbFloatDec do
   begin
     Name := 'chbFloatDec';
-    SetPosition(170, 220, 200, 20);
+    SetPosition(170, 200, 200, 20);
     FontDesc := '#Label1';
+    Hint := '';
     TabOrder := 16;
     Text := 'Limit EditFloat to 3 decimals';
     OnChange := @chbFloatDecChange;
+  end;
+
+  chbFloatFixDec := TfpgCheckBox.Create(self);
+  with chbFloatFixDec do
+  begin
+    Name := 'chbFloatFixDec';
+    SetPosition(170, 220, 200, 20);
+    FontDesc := '#Label1';
+    Hint := '';
+    TabOrder := 17;
+    Text := 'Set EditFloat to 3 decimals';
+    OnChange := @chbFloatFixDecChange;
+  end;
+
+  chbLimit := TfpgCheckBox.Create(self);
+  with chbLimit do
+  begin
+    Name := 'chbLimit';
+    SetPosition(170, 240, 200, 20);
+    FontDesc := '#Label1';
+    Hint := '';
+    TabOrder := 18;
+    Text := 'Limit min and max values';
+    OnChange := @chbLimitChange;
   end;
 
   lbNegativeColor := TfpgColorListBox.Create(self);
@@ -361,6 +439,9 @@ begin
     Name := 'lbNegativeColor';
     SetPosition(200, 28, 176, 92);
     Color := clRed;
+    FontDesc := '#List';
+    Hint := '';
+    TabOrder := 19;
     OnChange := @lbChange;
   end;
 
@@ -380,6 +461,7 @@ begin
     rbPoint.Checked := True
   else
     rbComma.Checked := True;
+  lbNegativeColor.SetFocus;
 end;
 
 procedure MainProc;

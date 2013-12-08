@@ -1,3 +1,19 @@
+{
+    fpGUI IDE - Maximus
+
+    Copyright (C) 2012 - 2013 Graeme Geldenhuys
+
+    See the file COPYING.modifiedLGPL, included in this distribution,
+    for details about redistributing fpGUI.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Description:
+      ---
+}
+
 unit frm_find;
 
 {$mode objfpc}{$H+}
@@ -34,6 +50,7 @@ type
     btnHelp: TfpgButton;
     {@VFD_HEAD_END: FindForm}
     procedure chkReplaceChanged(Sender: TObject);
+    procedure edtFindTextKeyPressed(Sender: TObject; var KeyCode: Word; var ShiftState: TShiftState; var Consumed: Boolean);
   public
     procedure AfterCreate; override;
   end;
@@ -81,6 +98,20 @@ begin
   edtReplaceText.Enabled := chkReplace.Checked;
 end;
 
+procedure TFindForm.edtFindTextKeyPressed(Sender: TObject; var KeyCode: Word; var ShiftState: TShiftState; var Consumed: Boolean);
+begin
+  if KeyCode = keyEnter then
+  begin
+    Consumed := True;
+    btnFind.Click;
+  end
+  else if KeyCode = keyEscape then
+  begin
+    Consumed := True;
+    Close;
+  end;
+end;
+
 procedure TFindForm.AfterCreate;
 begin
   {%region 'Auto-generated GUI code' -fold}
@@ -111,6 +142,7 @@ begin
     Hint := '';
     TabOrder := 2;
     Text := '';
+    OnKeyPress := @edtFindTextKeyPressed;
   end;
 
   chkReplace := TfpgCheckBox.Create(self);

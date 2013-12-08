@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2011 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -21,6 +21,9 @@ unit fpg_main;
 
 {.$Define DEBUG}
 
+// To enable the AggPas powered Canvas
+{.$define AGGCanvas}
+
 { TODO : Implement font size adjustments for each platform. eg: linux=10pt & windows=8pt }
 
 interface
@@ -28,6 +31,7 @@ interface
 uses
   Classes,
   SysUtils,
+  fpg_constants,
   fpg_base,
   fpg_interface,
   fpg_impl;
@@ -59,17 +63,6 @@ const
   AllAnchors = [anLeft, anRight, anTop, anBottom];
   TextFlagsDflt = [txtLeft, txtTop];
   
-  // Used for the internal message queue
-  cMessageQueueSize = 2048;
-
-  // version and name constants
-  {$I VERSION_FILE.inc}  // this includes the auto generated:  fpGUI_Version = xxx
-  fpGUIName    = 'fpGUI Toolkit';
-  fpGUIWebsite = 'http://fpgui.sourceforge.net/';
-
-const
-  txtWordDelims: set of char = [' ', #9, #13, #10];
-
 
 type
   { *******************************************
@@ -136,6 +129,7 @@ type
     procedure   SetParent(const AValue: TfpgWindow); reintroduce;
     function    GetParent: TfpgWindow; reintroduce;
     function    GetCanvas: TfpgCanvas; reintroduce;
+    function    CreateCanvas: TfpgCanvasBase; virtual;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -146,11 +140,14 @@ type
 
 
   TfpgImage = class(TfpgImageImpl)
+  private
+    function    GetScanLine(Row: Integer): Pointer;
   public
     function    CreateDisabledImage: TfpgImage;
     function    ImageFromSource: TfpgImage;
     function    ImageFromRect(var ARect: TRect): TfpgImage; overload;
     function    ImageFromRect(var ARect: TfpgRect): TfpgImage; overload;
+    property    ScanLine[Row: Integer]: Pointer read GetScanLine;
   end;
 
 
@@ -173,7 +170,7 @@ type
   private
     function    AddLineBreaks(const s: TfpgString; aMaxLineWidth: integer): string;
   public
-    constructor Create(awin: TfpgWindow); reintroduce;
+    constructor Create(awin: TfpgWindowBase); override;
     destructor  Destroy; override;
 
     // As soon as TfpgStyle has moved out of CoreLib, these must go!
@@ -217,6 +214,7 @@ type
     procedure   DrawButtonFace(ACanvas: TfpgCanvas; r: TfpgRect; AFlags: TfpgButtonFlags); overload;
     function    GetButtonBorders: TRect; virtual;
     function    GetButtonShift: TPoint; virtual;
+    function    HasButtonHoverEffect: boolean; virtual;
     { Menus }
     procedure   DrawMenuBar(ACanvas: TfpgCanvas; r: TfpgRect; ABackgroundColor: TfpgColor); virtual;
     procedure   DrawMenuRow(ACanvas: TfpgCanvas; r: TfpgRect; AFlags: TfpgMenuItemFlags); virtual;
@@ -270,7 +268,7 @@ type
   public
     constructor Create(const AParams: string = ''); override;
     destructor  Destroy; override;
-    function    GetFont(const afontdesc: string): TfpgFont;
+    function    GetFont(const afontdesc: TfpgString): TfpgFont;
     procedure   ActivateHint(APos: TPoint; AHint: TfpgString);
     procedure   RecreateHintWindow;
     procedure   Flush;
@@ -359,12 +357,14 @@ var
   fpgCaret:  TfpgCaret;   { TODO -ograemeg : move this into fpgApplication }
   fpgImages: TfpgImages;  { TODO -ograemeg : move this into fpgApplication }
 
+  DefaultCanvasClass: TfpgCanvasBaseClass = nil;
+
 // Application & Clipboard singletons
 function  fpgApplication: TfpgApplication;
 function  fpgClipboard: TfpgClipboard;
 
 // Fonts (easy access function)
-function  fpgGetFont(const afontdesc: string): TfpgFont;
+function  fpgGetFont(const afontdesc: TfpgString): TfpgFont;
 
 // Message Queue  (easy access function)
 procedure fpgWaitWindowMessage;
@@ -454,10 +454,15 @@ implementation
 uses
   strutils,
   math,
+{$ifdef AGGCanvas}
+  Agg2D,
+{$endif}
+{$IFDEF DEBUG}
+  dbugintf,
+{$ENDIF}
   fpg_imgfmt_bmp,
   fpg_stdimages,
   fpg_translations,
-  fpg_constants,
   fpg_widget,
   fpg_dialogs,
   fpg_hint,
@@ -830,14 +835,14 @@ begin
   FClassName := AClassName;
   FMethodName := AMethodName;
   {$IFDEF DEBUG}
-  Writeln(Format('%s>> %s.%s', [spacing, FClassName, FMethodName]));
+  SendDebug(Format('%s>> %s.%s', [spacing, FClassName, FMethodName]));
   {$ENDIF}
 end;
 
 destructor TPrintCallTrace.Destroy;
 begin
   {$IFDEF DEBUG}
-  Writeln(Format('%s<< %s.%s', [spacing, FClassName, FMethodName]));
+  SendDebug(Format('%s<< %s.%s', [spacing, FClassName, FMethodName]));
   {$ENDIF}
   dec(iCallTrace);
   inherited Destroy;
@@ -1120,7 +1125,7 @@ end;
 
 function fpgColorToRGB(col: TfpgColor): TfpgColor;
 begin
-  if (col and cl_BaseNamedColor) <> 0 then
+  if (((col shr 24) and $FF) = $80) and ((col and $FFFFFF) <= $FF) then
     Result := fpgNamedColors[col and $FF] or (col and $7F000000)// named color keeping alpha
   else
     Result := col;
@@ -1147,7 +1152,10 @@ end;
 
 function fpgIsNamedColor(col: TfpgColor): boolean;
 begin
-  Result := (col and cl_BaseNamedColor) <> 0;
+  if (((col shr 24) and $FF) = $80) and ((col and $FFFFFF) <= $FF) then
+    Result := True
+  else
+    Result := False;
 end;
 
 function fpgGetNamedFontDesc(afontid: string): string;
@@ -1162,7 +1170,7 @@ begin
     end;
 
   {$IFDEF DEBUG}
-  Writeln('GetNamedFontDesc error: "' + afontid + '" is missing. Default is used.');
+  SendDebug('GetNamedFontDesc error: "' + afontid + '" is missing. Default is used.');
   {$ENDIF}
   Result := FPG_DEFAULT_FONT_DESC;
 end;
@@ -1203,7 +1211,7 @@ begin
   fpgApplication.WaitWindowMessage(500);
 end;
 
-function fpgGetFont(const afontdesc: string): TfpgFont;
+function fpgGetFont(const afontdesc: TfpgString): TfpgFont;
 begin
   Result := fpgApplication.GetFont(afontdesc);
 end;
@@ -1290,11 +1298,11 @@ begin
   inherited Destroy;
 end;
 
-function TfpgApplication.GetFont(const afontdesc: string): TfpgFont;
+function TfpgApplication.GetFont(const afontdesc: TfpgString): TfpgFont;
 var
   fr: TfpgFontResource;
   n: integer;
-  fdesc: string;
+  fdesc: TfpgString;
 begin
   fdesc := afontdesc;
 
@@ -1323,7 +1331,7 @@ begin
   begin
     fr.Free;
     {$IFDEF DEBUG}
-    writeln('fpGFX: Error opening font.');
+    SendDebug('fpGFX: Error opening font.');
     {$ENDIF}
   end;
 end;
@@ -1646,7 +1654,7 @@ end;
 procedure TfpgApplication.HideHint;
 begin
   {$IFDEF DEBUG}
-  writeln('HideHint');
+  SendDebug('HideHint');
   {$ENDIF}
   FHintTimer.Enabled := False;
   if Assigned(FHintWindow) and TfpgHintWindow(FHintWindow).Visible then
@@ -1755,12 +1763,11 @@ begin
   end;
 end;
 
-constructor TfpgCanvas.Create(awin: TfpgWindow);
+constructor TfpgCanvas.Create(awin: TfpgWindowBase);
 begin
-  inherited Create;
+  inherited Create(awin);
 
   FBeginDrawCount := 0;
-  FWindow         := awin;
 
   // options
   FBufferedDraw        := True; // transparent widgets must turn this off
@@ -1900,6 +1907,11 @@ end;
 
 { TfpgWindow }
 
+function TfpgWindow.CreateCanvas: TfpgCanvasBase;
+begin
+  Result := DefaultCanvasClass.Create(self);
+end;
+
 constructor TfpgWindow.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner); // initialize the platform internals
@@ -1921,7 +1933,7 @@ begin
   else
     FWindowType   := wtWindow;
 
-  FCanvas := TfpgCanvas.Create(self);
+  FCanvas := CreateCanvas;
 end;
 
 destructor TfpgWindow.Destroy;
@@ -1964,38 +1976,38 @@ begin
 
   {$Note Refactor this so under Windows it can detect the system colors instead.
     Also under Linux (KDE and Gnome) we should be able to detect the system colors.}
-  fpgSetNamedColor(clWindowBackground, $D5D2CD);
-  fpgSetNamedColor(clBoxColor, $FFFFFF);
-  fpgSetNamedColor(clShadow1, $848284);       // medium
-  fpgSetNamedColor(clShadow2, $424142);       // dark
-  fpgSetNamedColor(clHilite1, $E0E0E0);       // light
-  fpgSetNamedColor(clHilite2, $FFFFFF);       // white
-  fpgSetNamedColor(clText1, $000000);
-  fpgSetNamedColor(clText2, $000040);
-  fpgSetNamedColor(clText3, $800000);
-  fpgSetNamedColor(clText4, $404000);
-  fpgSetNamedColor(clSelection, $08246A);
-  fpgSetNamedColor(clSelectionText, $FFFFFF);
-  fpgSetNamedColor(clInactiveSel, $99A6BF);  // win 2000 buttonface = $D4D0C8
-  fpgSetNamedColor(clInactiveSelText, $000000);
-  fpgSetNamedColor(clScrollBar, $E8E4DB);
-  fpgSetNamedColor(clButtonFace, $D5D2CD);
-  fpgSetNamedColor(clListBox, $FFFFFF);
-  fpgSetNamedColor(clGridLines, $A0A0A0);
-  fpgSetNamedColor(clGridHeader, $D5D2CD);
-  fpgSetNamedColor(clWidgetFrame, $000000);
-  fpgSetNamedColor(clInactiveWgFrame, $A0A0A0);
-  fpgSetNamedColor(clTextCursor, $000000);
-  fpgSetNamedColor(clChoiceListBox, $E8E8E8);
-  fpgSetNamedColor(clUnset, $99A6BF);                   // dull (gray) blue
-  fpgSetNamedColor(clMenuText, $000000);
-  fpgSetNamedColor(clMenuDisabled, $909090);
-  fpgSetNamedColor(clHintWindow, $FFFFBF);
-  fpgSetNamedColor(clGridSelection, $08246A);           // same as clSelection
-  fpgSetNamedColor(clGridSelectionText, $FFFFFF);       // same as clSelectionText
-  fpgSetNamedColor(clGridInactiveSel, $99A6BF);         // same as clInactiveSel
-  fpgSetNamedColor(clGridInactiveSelText, $000000);     // same as clInactiveSelText
-  fpgSetNamedColor(clSplitterGrabBar, $839EFE);         // pale blue
+  fpgSetNamedColor(clWindowBackground, $FFD5D2CD);
+  fpgSetNamedColor(clBoxColor, $FFFFFFFF);
+  fpgSetNamedColor(clShadow1, $FF848284);       // medium
+  fpgSetNamedColor(clShadow2, $FF424142);       // dark
+  fpgSetNamedColor(clHilite1, $FFE0E0E0);       // light
+  fpgSetNamedColor(clHilite2, $FFFFFFFF);       // white
+  fpgSetNamedColor(clText1, $FF000000);
+  fpgSetNamedColor(clText2, $FF000040);
+  fpgSetNamedColor(clText3, $FF800000);
+  fpgSetNamedColor(clText4, $FF404000);
+  fpgSetNamedColor(clSelection, $FF08246A);
+  fpgSetNamedColor(clSelectionText, $FFFFFFFF);
+  fpgSetNamedColor(clInactiveSel, $FF99A6BF);  // win 2000 buttonface = $D4D0C8
+  fpgSetNamedColor(clInactiveSelText, $FF000000);
+  fpgSetNamedColor(clScrollBar, $FFE8E4DB);
+  fpgSetNamedColor(clButtonFace, $FFD5D2CD);
+  fpgSetNamedColor(clListBox, $FFFFFFFF);
+  fpgSetNamedColor(clGridLines, $FFA0A0A0);
+  fpgSetNamedColor(clGridHeader, $FFD5D2CD);
+  fpgSetNamedColor(clWidgetFrame, $FF000000);
+  fpgSetNamedColor(clInactiveWgFrame, $FFA0A0A0);
+  fpgSetNamedColor(clTextCursor, $FF000000);
+  fpgSetNamedColor(clChoiceListBox, $FFE8E8E8);
+  fpgSetNamedColor(clUnset, $FF99A6BF);                   // dull (gray) blue
+  fpgSetNamedColor(clMenuText, $FF000000);
+  fpgSetNamedColor(clMenuDisabled, $FF909090);
+  fpgSetNamedColor(clHintWindow, $FFFFFFBF);
+  fpgSetNamedColor(clGridSelection, $FF08246A);           // same as clSelection
+  fpgSetNamedColor(clGridSelectionText, $FFFFFFFF);       // same as clSelectionText
+  fpgSetNamedColor(clGridInactiveSel, $FF99A6BF);         // same as clInactiveSel
+  fpgSetNamedColor(clGridInactiveSelText, $FF000000);     // same as clInactiveSelText
+  fpgSetNamedColor(clSplitterGrabBar, $FF839EFE);         // pale blue
 
 
   // Global Font Objects
@@ -2250,7 +2262,7 @@ var
   oldLineStyle: TfpgLineStyle;
 begin
   oldColor      := ACanvas.Color;
-  oldLineWidth  := ACanvas.LineWidth;
+  oldLineWidth  := ACanvas.GetLineWidth;
   oldLineStyle  := ACanvas.LineStyle;
 
   ACanvas.SetColor(clText1);
@@ -2330,6 +2342,11 @@ end;
 function TfpgStyle.GetButtonShift: TPoint;
 begin
   Result := Point(1, 1);
+end;
+
+function TfpgStyle.HasButtonHoverEffect: boolean;
+begin
+  Result := False;
 end;
 
 function TfpgStyle.GetControlFrameBorders: TRect;
@@ -2425,7 +2442,7 @@ begin
     {$Note This occurs every now and again with TfpgMemo and CaretInvert painting! }
     // Investigate this.
     {$IFDEF DEBUG}
-    writeln('TfpgCaret.InvertCaret cause an exception');
+    SendDebug('TfpgCaret.InvertCaret cause an exception');
     {$ENDIF}
   end;
 end;
@@ -2523,6 +2540,20 @@ end;
 
 
 { TfpgImage }
+
+function TfpgImage.GetScanLine(Row: Integer): Pointer;
+var
+  pdest: Plongword;
+begin
+  if (Height = 0) or (Width = 0) then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
+  pdest := ImageData; // This is so that pointer math uses correct increment size
+  Result := pdest + (Row * Width);
+end;
 
 function TfpgImage.CreateDisabledImage: TfpgImage;
 begin
@@ -2638,6 +2669,11 @@ initialization
   iCallTrace      := -1;
   InitializeDebugOutput;
   fpgInitMsgQueue;
+{$ifdef AGGCanvas}
+  DefaultCanvasClass := TAgg2D;
+{$else}
+  DefaultCanvasClass := TfpgCanvas;
+{$endif}
 
 finalization
   uClipboard.Free;

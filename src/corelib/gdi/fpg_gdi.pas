@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2011 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -17,6 +17,9 @@
       Win32 API Reference - http://msdn.microsoft.com/en-us/library/ff468919(VS.85).aspx
       Windows CE 3.0 API Reference - http://msdn.microsoft.com/en-us/library/ms925466.aspx
       FPC WinCE information - http://wiki.freepascal.org/WinCE_port
+
+    TODO:
+      * Refactor out the many $IFDEF CPU64 lines in this unit.
 }
 
 unit fpg_gdi;
@@ -81,12 +84,12 @@ type
 
   TfpgGDIImage = class(TfpgImageBase)
   private
+    FIsTwoColor: boolean;
     FBMPHandle: HBITMAP;
     FMaskHandle: HBITMAP;
-    FIsTwoColor: boolean;
+  protected
     property    BMPHandle: HBITMAP read FBMPHandle;
     property    MaskHandle: HBITMAP read FMaskHandle;
-  protected
     procedure   DoFreeImage; override;
     procedure   DoInitImage(acolordepth, awidth, aheight: integer; aimgdata: Pointer); override;
     procedure   DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer); override;
@@ -142,7 +145,7 @@ type
     procedure   DoDrawPolygon(Points: PPoint; NumPts: Integer; Winding: boolean = False); override;
     property    DCHandle: TfpgDCHandle read Fgc;
   public
-    constructor Create; override;
+    constructor Create(awin: TfpgWindowBase); override;
     destructor  Destroy; override;
   end;
 
@@ -204,6 +207,7 @@ type
   TfpgGDIApplication = class(TfpgApplicationBase)
   private
     FDrag: TfpgGDIDrag;
+    procedure   DoWakeMainThread(Sender: TObject);
     procedure   SetDrag(const AValue: TfpgGDIDrag);
     property    Drag: TfpgGDIDrag read FDrag write SetDrag;
   protected
@@ -301,8 +305,6 @@ type
   end;
 
 
-  { TfpgGDITimer }
-
   TfpgGDITimer = class(TfpgBaseTimer)
   private
     FHandle: THandle;
@@ -310,6 +312,16 @@ type
     procedure   SetEnabled(const AValue: boolean); override;
   public
     constructor Create(AInterval: integer); override;
+  end;
+
+
+  TfpgGDISystemTrayIcon = class(TfpgComponent)
+  public
+    constructor Create(AOwner: TComponent); override;
+    procedure   Show;
+    procedure   Hide;
+    function    IsSystemTrayAvailable: boolean;
+    function    SupportsMessages: boolean;
   end;
 
 
@@ -373,22 +385,35 @@ var
 begin
   c      := fpgColorToRGB(col);
   //swapping bytes (Red and Blue colors)
-  Result := ((c and $FF0000) shr 16) or ((c and $0000FF) shl 16) or (c and $00FF00);
+  Result := ((c and $FF0000) shr 16) or (c and $00FF00) or ((c and $0000FF) shl 16);
 end;
 
 function WinColorTofpgColor(col: longword): TfpgColor;
+var
+  t: TRGBTriple;
 begin
-  //swapping bytes
-  Result := fpgColorToWin(col);
+  { Windown Color is BBGGRR format }
+  t.Blue := (col and $FF0000) shr 16;
+  t.Green := (col and $00FF00) shr 8;
+  t.Red := (col and $0000FF);
+  t.Alpha := $FF;
+
+  Result := RGBTripleTofpgColor(t);
 end;
 
 function GetMyWidgetFromHandle(wh: TfpgWinHandle): TfpgWidget;
 var
   wg: TfpgWidget;
 begin
+  {$IFDEF CPU64}
+  wg := TfpgWidget(Windows.GetWindowLongPtr(wh, GWL_USERDATA));
+  if (wh <> 0) and (MainInstance = GetWindowLongPtr(wh, GWL_HINSTANCE))
+    and (wg is TfpgWidget)
+  {$ELSE}
   wg := TfpgWidget(Windows.GetWindowLong(wh, GWL_USERDATA));
   if (wh <> 0) and (MainInstance = longword(GetWindowLong(wh, GWL_HINSTANCE)))
     and (wg is TfpgWidget)
+  {$ENDIF}
   then
     Result := wg
   else
@@ -721,7 +746,11 @@ begin
     w := TfpgGDIWindow(PCreateStruct(lParam)^.lpCreateParams);
     w.FWinHandle := hwnd; // this is very important, because number of messages sent
     // before the createwindow returns the window handle
+    {$IFDEF CPU64}
+    Windows.SetWindowLongPtr(hwnd, GWL_USERDATA, long_ptr(w));
+    {$ELSE}
     Windows.SetWindowLong(hwnd, GWL_USERDATA, longword(w));
+    {$ENDIF}
   end
   else if (uMsg = WM_RENDERALLFORMATS) or (uMsg = WM_RENDERFORMAT) then
   begin
@@ -756,7 +785,11 @@ begin
     Exit; //==>
   end;
 
+  {$IFDEF CPU64}
+  w      := TfpgGDIWindow(Windows.GetWindowLongPtr(hwnd, GWL_USERDATA));
+  {$ELSE}
   w      := TfpgGDIWindow(Windows.GetWindowLong(hwnd, GWL_USERDATA));
+  {$ENDIF}
   Result := 0;
 
   if not (w is TfpgGDIWindow) then
@@ -1016,7 +1049,11 @@ begin
           SendDebug(w.ClassName + ': WM_MOVE');
           {$ENDIF}
           // window decoration correction ...
+          {$IFDEF CPU64}
+          if (GetWindowLongPtr(w.WinHandle, GWL_STYLE) and WS_CHILD) = 0 then
+          {$ELSE}
           if (GetWindowLong(w.WinHandle, GWL_STYLE) and WS_CHILD) = 0 then
+          {$ENDIF}
           begin
             GetWindowRect(w.WinHandle, r);
             msgp.rect.Left := r.Left;
@@ -1041,7 +1078,13 @@ begin
           mw   := nil;
           h    := WindowFromPoint(pt);
           if h > 0 then  // get window mouse is hovering over
+          begin
+            {$IFDEF CPU64}
+            mw := TfpgGDIWindow(Windows.GetWindowLongPtr(h, GWL_USERDATA));
+            {$ELSE}
             mw := TfpgGDIWindow(Windows.GetWindowLong(h, GWL_USERDATA));
+            {$ENDIF}
+          end;
 
           if (mw is TfpgGDIWindow) then
           begin
@@ -1184,11 +1227,17 @@ begin
   FillChar(LFont, sizeof(LFont), 0);
   LFont.lfCharset := DEFAULT_CHARSET;
   {$IFDEF wince}
-  EnumFontFamiliesW(Display, @LFont, @MyFontEnumerator, LongInt(result));
+  EnumFontFamiliesW(Display, @LFont, @MyFontEnumerator, LParam(result));
   {$ELSE}
-  EnumFontFamiliesEx(Display, @LFont, @MyFontEnumerator, LongInt(result), 0);
+  EnumFontFamiliesEx(Display, @LFont, @MyFontEnumerator, LParam(result), 0);
   {$ENDIF}
   Result.Sort;
+end;
+
+procedure TfpgGDIApplication.DoWakeMainThread(Sender: TObject);
+begin
+  // WakeMainThread is called during TThread.Synchronize.
+  Windows.PostMessage(TfpgGDIWindow(MainForm).WinHandle, WM_NULL, 0, 0);
 end;
 
 procedure TfpgGDIApplication.SetDrag(const AValue: TfpgGDIDrag);
@@ -1271,10 +1320,12 @@ begin
 
   FIsInitialized := True;
   wapplication   := TfpgApplication(self);
+  WakeMainThread := @DoWakeMainThread;
 end;
 
 destructor TfpgGDIApplication.Destroy;
 begin
+  WakeMainThread := nil;
   if Assigned(FDrag) then
     FDrag.Free;
   UnhookWindowsHookEx(ActivationHook);
@@ -1605,21 +1656,29 @@ begin
       UpdateWindowPosition;
 
     FWinStyle := WS_POPUP or WS_SYSMENU;
+    FWinStyle := FWinStyle and not(WS_CAPTION or WS_THICKFRAME);
     
     if aUpdate then
     begin
+      {$IFDEF CPU64}
+      SetWindowLongPtr(FWinHandle, GWL_STYLE, FWinStyle);
+      {$ELSE}
       SetWindowLong(FWinHandle, GWL_STYLE, FWinStyle);
-      {According to MSDN, call SetWindowPos to apply changes made by SetWindowLong.
-      uFlags should be SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED}
-      SetWindowPos(FWinHandle,0,0,0,0,0,SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or SWP_FRAMECHANGED);
-      ShowWindow(FWinHandle, SW_SHOW);
+      {$ENDIF}
+      { According to MSDN, call SetWindowPos to apply changes made by SetWindowLong. }
+      SetWindowPos(FWinHandle,HWND_TOP,0,0,Width,Height,SWP_FRAMECHANGED or SWP_SHOWWINDOW or SWP_NOACTIVATE);
     end;
-  end else
+  end
+  else
   begin
     FWinStyle := FNonFullscreenStyle;
     if aUpdate then
     begin
+      {$IFDEF CPU64}
+      SetWindowLongPtr(FWinHandle, GWL_STYLE, FWinStyle);
+      {$ELSE}
       SetWindowLong(FWinHandle, GWL_STYLE, FWinStyle);
+      {$ENDIF}
       SetWindowPos(FWinHandle,0,0,0,0,0,SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or SWP_FRAMECHANGED);
       ShowWindow(FWinHandle, SW_SHOW);
     end;
@@ -1948,7 +2007,11 @@ var
   placement: TWindowPlacement;
 begin
   Result := inherited GetWindowState;
+  {$IFDEF CPU64}
+  case GetWindowLongPtr(FWinHandle, flagsoffs) of
+  {$ELSE}
   case GetWindowLong(FWinHandle, flagsoffs) of
+  {$ENDIF}
     1:
       begin
         Result := wsMaximized; { TODO: this could later become wsFullScreen or something }
@@ -1994,7 +2057,10 @@ end;
 
 procedure TfpgGDIWindow.ActivateWindow;
 begin
-  SetForegroundWindow(FWinHandle);
+    Windows.SetWindowPos(
+      WinHandle, HWND_NOTOPMOST,
+      FLeft, FTop, FWidth, FHeight,
+      SWP_NOZORDER or SWP_NOSIZE);
 end;
 
 procedure TfpgGDIWindow.CaptureMouse;
@@ -2019,7 +2085,10 @@ end;
 procedure TfpgGDIWindow.BringToFront;
 begin
   if HasHandle then
-    BringWindowToTop(FWinHandle);
+    Windows.SetWindowPos(
+      WinHandle, HWND_TOP,
+      FLeft, FTop, FWidth, FHeight,
+      SWP_NOACTIVATE or SWP_NOSIZE);
 end;
 
 function TfpgGDIWindow.HandleIsValid: boolean;
@@ -2046,9 +2115,9 @@ end;
 
 { TfpgGDICanvas }
 
-constructor TfpgGDICanvas.Create;
+constructor TfpgGDICanvas.Create(awin: TfpgWindowBase);
 begin
-  inherited;
+  inherited Create(awin);
   FDrawing      := False;
   FDrawWindow   := nil;
   FBufferBitmap := 0;
@@ -2142,7 +2211,7 @@ function TfpgGDICanvas.GetPixel(X, Y: integer): TfpgColor;
 var
   c: longword;
 begin
-  c := Windows.GetPixel(Fgc, X, Y);
+  c := Windows.GetPixel(FWinGC, X, Y);
   if c = CLR_INVALID then
     Writeln('fpGFX/GDI: TfpgGDICanvas.GetPixel returned an invalid color');
   Result := WinColorTofpgColor(c);
@@ -2879,7 +2948,6 @@ var
   FDropSource: TfpgOLEDropSource;
   lIsTranslated: boolean;
 begin
-  { TODO: this still needs to be implemented }
   if FDragging then
   begin
     {$IFDEF DND_DEBUG}
@@ -3052,6 +3120,35 @@ begin
   inherited Create(AInterval);
   FHandle := 0;
 end;
+
+
+{ TfpgGDISystemTrayIcon }
+
+constructor TfpgGDISystemTrayIcon.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+end;
+
+procedure TfpgGDISystemTrayIcon.Show;
+begin
+  //
+end;
+
+procedure TfpgGDISystemTrayIcon.Hide;
+begin
+  //
+end;
+
+function TfpgGDISystemTrayIcon.IsSystemTrayAvailable: boolean;
+begin
+  Result := False;
+end;
+
+function TfpgGDISystemTrayIcon.SupportsMessages: boolean;
+begin
+   Result := True;
+end;
+
 
 
 initialization

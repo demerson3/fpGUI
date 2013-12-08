@@ -75,15 +75,6 @@ resourcestring
 
 
 const
-  // FPC 2.2.0 and earlier only
-  {$if defined(VER2_0) or defined(VER2_2_0)}
-    {$IFDEF UNIX}
-    AllFilesMask    = '*';
-    {$ELSE}
-    AllFilesMask    = '*.*';
-    {$ENDIF UNIX}
-  {$endif}
-  
 
   { Double click support }
   DOUBLECLICK_MS = 320; // the max time between left-clicks for doubleclick in milliseconds
@@ -100,6 +91,15 @@ const
   FPG_BOOKMARKS_FILE = 'bookmarks.ini';
   FPG_BOOKMARK_SECTION = 'bookmarks';
   
+  // Used for the internal message queue
+  cMessageQueueSize = 2048;
+
+  // version and name constants
+  {$I VERSION_FILE.inc}  // this includes the auto generated:  fpGUI_Version = xxx
+  fpGUIName    = 'fpGUI Toolkit';
+  fpGUIWebsite = 'http://fpgui.sourceforge.net/';
+
+  txtWordDelims: set of char = [' ', #9, #13, #10];
 
 
 

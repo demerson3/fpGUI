@@ -1,3 +1,19 @@
+{
+    fpGUI IDE - Maximus
+
+    Copyright (C) 2012 - 2013 Graeme Geldenhuys
+
+    See the file COPYING.modifiedLGPL, included in this distribution,
+    for details about redistributing fpGUI.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Description:
+      ---
+}
+
 unit ideutils;
 
 {$mode objfpc}{$H+}
@@ -58,6 +74,9 @@ function IsPas(const FileName: string): Boolean;
 function IsInc(const FileName: string): Boolean;
 function IsProgram(const FileName: string): Boolean;
 
+{ Handles key shortcuts like Ctrl+Ins or Ctrl+Del to add or remove grid rows.
+  We add this here, so we can reuse it all over in the IDE. }
+procedure CheckGridModifyKeyPresses(Sender: TObject; var KeyCode: word; var ShiftState: TShiftState; var Consumed: boolean);
 
 
 
@@ -66,8 +85,10 @@ implementation
 uses
   fpg_form
   ,fpg_memo
+  ,fpg_grid
   ,fpg_main
   ,fpg_utils
+  ,dbugintf
   ;
 
 var
@@ -96,7 +117,7 @@ type
     constructor Create(var AWidget: TfpgWidget);
     destructor Destroy; override;
   end;
-  
+
 constructor TTempHourClassCursor.Create(var AWidget: TfpgWidget);
 begin
   inherited Create;
@@ -110,7 +131,7 @@ begin
   FWidget.MouseCursor := FOldCursor;
   inherited Destroy;
 end;
-  
+
 
 
 function TempHourGlassCursor(var AWidget: TfpgWidget): IInterface;
@@ -385,6 +406,34 @@ var
 begin
   FileExt := ExtractUpperFileExt(FileName);
   Result := (FileExt = '.LPR') or (FileExt = '.DPR');
+end;
+
+procedure CheckGridModifyKeyPresses(Sender: TObject; var KeyCode: word;
+    var ShiftState: TShiftState; var Consumed: boolean);
+var
+  grd: TfpgStringGrid;
+  r: integer;
+begin
+  grd := TfpgStringGrid(Sender);
+  if (KeyCode = keyInsert) and (ssCtrl in ShiftState) then
+  begin
+    grd.RowCount := grd.RowCount + 1;
+    Consumed := True;
+    Exit;
+  end
+  else if (KeyCode = keyDelete) and (ssCtrl in ShiftState) then
+  begin
+    if grd.RowCount = 0 then
+      Exit;
+    r := grd.FocusRow;
+    grd.DeleteRow(r);
+    if (grd.RowCount <> 0) and (grd.RowCount > r) then
+      grd.FocusRow := r // focus what was next row
+    else if (grd.RowCount <> 0) and (grd.RowCount <= r) then
+      grd.FocusRow := r-1; // focus what was previous row
+    Consumed := True;
+    Exit;
+  end;
 end;
 
 

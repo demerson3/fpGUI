@@ -307,7 +307,7 @@ end;
 
 function TNETWindowLayer.GetNetAtom(AAtom: TNetAtomEnum): TNetAtom;
 begin
-  Result := FNetAtoms[AAtom]
+  Result := FNetAtoms[AAtom];
 end;
 
 procedure TNETWindowLayer.UpdateSupportedAtoms;
@@ -317,16 +317,19 @@ var
   I: Integer;
   ANetAtom: TNetAtomEnum;
 begin
-//  if WindowGetPropertyAtom(FRootWindow, FNetAtoms[naSUPPORTED], AtomCount, Atoms) = False then
-//    Exit;
+  if WindowGetPropertyAtom(FRootWindow, FNetAtoms[naSUPPORTED], AtomCount, Atoms) = False then
+    Exit;
 
-  WriteLn('RootWindow Atom Count = ',AtomCount);
+//  WriteLn('RootWindow Atom Count = ',AtomCount);
   FillChar(FAtomSupported, SizeOf(Boolean) * Length(FAtomSupported), 0);;
-  for I := 0 to AtomCount-1 do begin
-    for ANetAtom := Low(TNetAtomEnum) to High(TNetAtomEnum) do begin
-      if Atoms[I] = FNetAtoms[ANetAtom] then begin
+  for I := 0 to AtomCount-1 do
+  begin
+    for ANetAtom := Low(TNetAtomEnum) to High(TNetAtomEnum) do
+    begin
+      if Atoms[I] = FNetAtoms[ANetAtom] then
+      begin
         FAtomSupported[ANetAtom] := True;
-        //WriteLn('Found ', NetAtomStr[NetAtom]);
+//        WriteLn('Found ', NetAtomStr[ANetAtom]);
       end;
     end;
   end;
@@ -334,15 +337,13 @@ begin
     XFree(Atoms);
 end;
 
-function TNETWindowLayer.WindowSetName(const AWindow: TWindow; AName: PChar
-  ): Boolean;
+function TNETWindowLayer.WindowSetName(const AWindow: TWindow; AName: PChar): Boolean;
 begin
   Result := True; //????
   WindowSetPropertyUTF8(AWindow, FNetAtoms[naWM_NAME], Length(AName), AName);
 end;
 
-function TNETWindowLayer.WindowGetHidden(const AWindow: TWindow; out AValue: Boolean
-  ): Boolean;
+function TNETWindowLayer.WindowGetHidden(const AWindow: TWindow; out AValue: Boolean): Boolean;
 var
   WinState: TNetWindowStates;
 begin
@@ -441,7 +442,10 @@ begin
 
   Msg.message_type := FNetAtoms[naWM_STATE];
   Msg.window := AWindow;
-  Msg.data.l[0] := Ord(AValue);
+  if AValue then
+    Msg.data.l[0] := _NET_WM_STATE_ADD
+  else
+    Msg.data.l[0] := _NET_WM_STATE_REMOVE;
   Msg.data.l[1] := FNetAtoms[naWM_STATE_FULLSCREEN];
   Msg.data.l[3] := _NET_SOURCE_APPLICATION;
 
@@ -1113,7 +1117,7 @@ begin
   FDisplay := ADisplay;
   FRootWindow := XDefaultRootWindow(FDisplay);
   InitNetAtoms;
-//  UpdateSupportedAtoms;
+  UpdateSupportedAtoms;
 end;
 
 destructor TNETWindowLayer.Destroy;

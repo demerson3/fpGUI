@@ -30,25 +30,26 @@ type
 
 
 function  UTF8CharacterLength(p: PChar): integer;
-function  UTF8CharStart(UTF8Str: PChar; Len, Index: integer): PChar;
-function  UTF8Copy(const s: string; StartCharIndex, CharCount: integer): string;
-function  UTF8CStringToUTF8String(SourceStart: PChar; SourceLen: SizeInt): string;
-function  UTF8Length(const s: string): integer;
-function  UTF8Length(p: PChar; ByteCount: integer): integer;
-function  UTF8Pos(const SearchForText, SearchInText: string): integer;
-procedure UTF8Delete(var S: string; Index, Size: integer);
-procedure UTF8Insert(const SubStr: string; var AText: string; Index: integer);
-function  UTF8CharAtByte(const s: string; const BytePos: integer; out aChar: string): integer;
+function  UTF8CharToUnicode(p: PChar; out CharLen: longint): Cardinal;
+function  UTF8CharStart(UTF8Str: PChar; Len, Index: PtrInt): PChar;
+function  UTF8Copy(const s: string; StartCharIndex, CharCount: PtrInt): string;
+function  UTF8CStringToUTF8String(SourceStart: PChar; SourceLen: PtrInt): string;
+function  UTF8Length(const s: string): PtrInt;
+function  UTF8Length(p: PChar; ByteCount: PtrInt): PtrInt;
+function  UTF8Pos(const SearchForText, SearchInText: string): PtrInt;
+procedure UTF8Delete(var S: string; Index, Size: PtrInt);
+procedure UTF8Insert(const SubStr: string; var AText: string; Index: PtrInt);
+function  UTF8CharAtByte(const s: string; const BytePos: PtrInt; out aChar: string): PtrInt;
 
 
 // short form (alias or convenience) functions for the UTF8 ones above
-function  Copy8(const s: string; StartCharIndex, CharCount: integer): string;
-function  Length8(const s: string): integer;
-function  Pos8(const SearchForText, SearchInText: string): integer;
-procedure Delete8(var S: string; Index, Size: integer);
-procedure Insert8(const Source: string; var S: string; Index: integer);
+function  Copy8(const s: string; StartCharIndex, CharCount: PtrInt): string;
+function  Length8(const s: string): PtrInt;
+function  Pos8(const SearchForText, SearchInText: string): PtrInt;
+procedure Delete8(var S: string; Index, Size: PtrInt);
+procedure Insert8(const Source: string; var S: string; Index: PtrInt);
 
-function  fpgCharAt(const s: TfpgString; Index: integer): TfpgChar;
+function  fpgCharAt(const s: TfpgString; Index: PtrInt): TfpgChar;
 function  fpgAppendPathDelim(const Path: TfpgString): TfpgString;
 function  fpgRemovePathDelim(const Path: TfpgString): TfpgString;
 function  fpgTrimR(const AString, ATrim: TfpgString; ACaseSensitive: boolean = false): TfpgString;
@@ -112,8 +113,59 @@ begin
     Result := 0;
 end;
 
+function UTF8CharToUnicode(p: PChar; out CharLen: longint): Cardinal;
+begin
+  if p=nil then begin
+    Result:=0;
+    CharLen:=0;
+    exit;
+  end;
+  if ord(p^) < %11000000 then begin
+    // regular single byte character (#0 is a normal char, this is pascal ;)
+  end
+  else if ((ord(p^) and %11100000) = %11000000) then begin
+    // could be double byte character
+    if (ord(p[1]) and %11000000) = %10000000 then begin
+      Result:=((ord(p^) and %00011111) shl 6)
+              or (ord(p[1]) and %00111111);
+      CharLen:=2;
+      exit;
+    end;
+  end
+  else if ((ord(p^) and %11110000) = %11100000) then begin
+    // could be triple byte character
+    if ((ord(p[1]) and %11000000) = %10000000)
+    and ((ord(p[2]) and %11000000) = %10000000) then begin
+      Result:=((ord(p^) and %00011111) shl 12)
+              or ((ord(p[1]) and %00111111) shl 6)
+              or (ord(p[2]) and %00111111);
+      CharLen:=3;
+      exit;
+    end;
+  end
+  else if ((ord(p^) and %11111000) = %11110000) then begin
+    // could be 4 byte character
+    if ((ord(p[1]) and %11000000) = %10000000)
+    and ((ord(p[2]) and %11000000) = %10000000)
+    and ((ord(p[3]) and %11000000) = %10000000) then begin
+      Result:=((ord(p^) and %00001111) shl 18)
+              or ((ord(p[1]) and %00111111) shl 12)
+              or ((ord(p[2]) and %00111111) shl 6)
+              or (ord(p[3]) and %00111111);
+      CharLen:=4;
+      exit;
+    end;
+  end
+  else begin
+    // invalid character
+  end;
+  Result:=ord(p^);
+  CharLen:=1;
+end;
+
+
 { Returns the character starting position as PChar in the UTF8Str string. }
-function UTF8CharStart(UTF8Str: PChar; Len, Index: integer): PChar;
+function UTF8CharStart(UTF8Str: PChar; Len, Index: PtrInt): PChar;
 var
   CharLen: LongInt;
 begin
@@ -133,7 +185,7 @@ begin
 end;
 
 // returns substring
-function UTF8Copy(const s: string; StartCharIndex, CharCount: integer): string;
+function UTF8Copy(const s: string; StartCharIndex, CharCount: PtrInt): string;
 var
   StartBytePos: PChar;
   EndBytePos: PChar;
@@ -160,12 +212,11 @@ begin
   end;
 end;
 
-function UTF8CStringToUTF8String(SourceStart: PChar; SourceLen: SizeInt): string;
+function UTF8CStringToUTF8String(SourceStart: PChar; SourceLen: PtrInt): string;
 var
   Source: PChar;
   Dest: PChar;
   SourceEnd: PChar;
-  CharLen: integer;
   SourceCopied: PChar;
 
   // Copies from SourceStart till Source to Dest and updates Dest
@@ -190,8 +241,7 @@ begin
   SourceEnd := Source + SourceLen;
   while Source<SourceEnd do
   begin
-    CharLen := UTF8CharacterLength(Source);
-    if (CharLen=1) and (Source^='\') then
+    if (Source^='\') then
     begin
       CopyPart;
       inc(Source);
@@ -220,13 +270,13 @@ begin
       SourceCopied := Source;
     end
     else
-      Inc(Source, CharLen);
+      Inc(Source, UTF8CharacterLength(Source));
   end;
   CopyPart;
   SetLength(Result, Dest - PChar(Result));
 end;
 
-function UTF8Length(const s: string): integer;
+function UTF8Length(const s: string): PtrInt;
 begin
   if s = '' then
     Result := 0
@@ -234,9 +284,9 @@ begin
     Result := UTF8Length(PChar(s),length(s));
 end;
 
-function UTF8Length(p: PChar; ByteCount: integer): integer;
+function UTF8Length(p: PChar; ByteCount: PtrInt): PtrInt;
 var
-  CharLen: LongInt;
+  CharLen: Integer;
 begin
   Result := 0;
   while (ByteCount > 0) do
@@ -249,9 +299,9 @@ begin
 end;
 
 // returns the character index, where the SearchForText starts in SearchInText
-function UTF8Pos(const SearchForText, SearchInText: string): integer;
+function UTF8Pos(const SearchForText, SearchInText: string): PtrInt;
 var
- p: LongInt;
+ p: SizeInt;
 begin
   p := System.Pos(SearchForText, SearchInText);
   if p > 0 then
@@ -260,9 +310,9 @@ begin
     Result := 0;
 end;
 
-procedure UTF8Delete(var S: string; Index, Size: integer);
+procedure UTF8Delete(var S: string; Index, Size: PtrInt);
 var
-  ls: integer;
+  ls: PtrInt;
   b: string;
   e: string;
 begin
@@ -274,25 +324,27 @@ begin
   S := b + e;
 end;
 
-procedure UTF8Insert(const SubStr: string; var AText: string; Index: integer);
+procedure UTF8Insert(const SubStr: string; var AText: string; Index: PtrInt);
 var
   b: string;
   e: string;
 begin
-  if UTF8Length(SubStr) = 0 then
+  if Length(SubStr) = 0 then
     Exit; //==>
   b := UTF8Copy(AText, 1, Index-1); // beginning string
   e := UTF8Copy(AText, Index, UTF8Length(AText)-Index+1); // ending string
   AText := b + SubStr + e;
 end;
 
-function UTF8CharAtByte(const s: string; const BytePos: integer; out aChar: string): integer;
+function UTF8CharAtByte(const s: string; const BytePos: PtrInt; out aChar: string): PtrInt;
 var
   CharLen: Integer;
 begin
   if BytePos > 0 then
   begin
+    {$R-}  { Disable range-check because we do it manually above }
     CharLen := UTF8CharacterLength(@s[BytePos]);
+    {$R+}
     aChar   := Copy(s, BytePos, CharLen);
     Result  := BytePos + CharLen;
   end else
@@ -302,32 +354,32 @@ begin
   end;
 end;
 
-function Copy8(const s: string; StartCharIndex, CharCount: integer): string;
+function Copy8(const s: string; StartCharIndex, CharCount: PtrInt): string;
 begin
   Result := UTF8Copy(s, StartCharIndex, CharCount);
 end;
 
-function Length8(const s: string): integer;
+function Length8(const s: string): PtrInt;
 begin
   Result := UTF8Length(s);
 end;
 
-function Pos8(const SearchForText, SearchInText: string): integer;
+function Pos8(const SearchForText, SearchInText: string): PtrInt;
 begin
   Result := UTF8Pos(SearchForText, SearchInText);
 end;
 
-procedure Delete8(var S: string; Index, Size: integer);
+procedure Delete8(var S: string; Index, Size: PtrInt);
 begin
   UTF8Delete(S, Index, Size);
 end;
 
-procedure Insert8(const Source: string; var S: string; Index: integer);
+procedure Insert8(const Source: string; var S: string; Index: PtrInt);
 begin
   UTF8Insert(Source, S, Index);
 end;
 
-function fpgCharAt(const s: TfpgString; Index: integer): TfpgChar;
+function fpgCharAt(const s: TfpgString; Index: PtrInt): TfpgChar;
 begin
   Result := UTF8Copy(s, Index, 1);
 end;
@@ -1441,22 +1493,6 @@ begin
   // IBM Graph CodePage 437 (kind-of) to Unicode mapping.
   // Below is what we had before this function
   Result := SingleByteToUTF8(s, ArrayIPFToUTF8);
-  //Result := s;
-  //Result := StringReplace(Result, Chr($07), #$E2#$80#$A2, [rfReplaceAll, rfIgnoreCase]);    // u+2022  small bullet
-  //Result := tiStrTran(Result, Char(16), '>' );
-  //Result := tiStrTran(Result, Char(17), '<' );
-  //Result := tiStrTran(Result, Char($1f), '▼' );
-  //Result := tiStrTran(Result, Char(179), '│' );
-  //Result := tiStrTran(Result, Char(180), '┤' );
-  //Result := tiStrTran(Result, Char(191), '┐' );
-  //Result := tiStrTran(Result, Char(192), '└' );
-  //Result := tiStrTran(Result, Char(193), '┴' );
-  //Result := tiStrTran(Result, Char(194), '┬' );
-  //Result := tiStrTran(Result, Char(195), '├' );
-  //Result := tiStrTran(Result, Char(196), '─' );
-  //Result := tiStrTran(Result, Char(197), '┼' );
-  //Result := tiStrTran(Result, Char(217), '┘' );
-  //Result := tiStrTran(Result, Char(218), '┌' );
 end;
 
 function SingleByteToUTF8(const s: string; const Table: TCharToUTF8Table): TfpgString;

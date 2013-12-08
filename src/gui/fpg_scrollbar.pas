@@ -39,7 +39,7 @@ uses
 type
   TScrollNotifyEvent = procedure(Sender: TObject; position: integer) of object;
 
-  TfpgScrollStyle = (ssNone, ssHorizontal, ssVertical, ssAutoBoth);
+  TfpgScrollStyle = (ssNone, ssHorizontal, ssVertical, ssAutoBoth, ssBothVisible);
   
   TfpgScrollBarPart = (sbpNone, sbpUpBack, sbpPageUpBack, sbpSlider, sbpDownForward, sbpPageDownForward);
 
@@ -493,14 +493,14 @@ begin
     if x <= Height then
     begin
       // Left button has been pressed
-      StepPage(-1);
+      Step(-1);
       FScrollbarDownPart := sbpUpBack;
       FActiveButtonRect.SetRect(0, 0, Height, Height);
     end
     else if x >= Width - Height then
     begin
       // Right button has been pressed
-      StepPage(1);
+      Step(1);
       FScrollbarDownPart := sbpDownForward;
       FActiveButtonRect.SetRect(Width-Height, 0, Width, Height);
     end

@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2010 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2013 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -124,17 +124,20 @@ type
     function    GetGutterVisible: Boolean;
     function    GetHScrollPos: Integer;
     function    GetVScrollPos: Integer;
+    function    GetCaretPosH: Integer;
+    function    GetCaretPosV: Integer;
     procedure   SetFontDesc(const AValue: string);
     procedure   SetGutterShowLineNumbers(const AValue: Boolean);
     procedure   SetGutterVisible(const AValue: Boolean);
     procedure   SetHScrollPos(const AValue: Integer);
+    procedure   SetCaretPosH(const AValue: Integer);
+    procedure   SetCaretPosV(const AValue: Integer);
     procedure   SetLines(const AValue: TStrings);
     procedure   SetScrollBarStyle(const AValue: TfpgScrollStyle);
     procedure   SetTabWidth(const AValue: Integer);
     procedure   SetVScrollPos(const AValue: Integer);
     procedure   UpdateCharBounds;
     procedure   GetSelBounds(var AStartNo, AEndNo, AStartOffs, AEndOffs: Integer);
-    procedure   UpdateScrollBars;
     procedure   VScrollBarMove(Sender: TObject; position: integer);
     procedure   HScrollBarMove(Sender: TObject; position: integer);
     procedure   SetVPos(p: Integer);
@@ -181,16 +184,24 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
+    procedure   UpdateScrollBars;
     function    GetClientRect: TfpgRect; override;
     function    GetWordAtPos(const X, Y: Integer; out XBegin: Integer): TfpgString;
     procedure   GetRowColAtPos(const X, Y: Integer; out Row, Col: Integer);
     procedure   Clear;
+    procedure   InsertTextAtPos(S: TfpgString; Col, Row: Integer);
     procedure   ScrollTo(X, Y: Integer);
     procedure   GotoLine(ALine: integer);
+    procedure   CopyToClipboard;
+    procedure   CutToClipboard;
+    procedure   PasteFromClipboard;
     procedure   DeleteSelection;
+    function    GetSelectedText: TfpgString;
     procedure   SaveToFile(const AFileName: TfpgString);
     procedure   LoadFromFile(const AFileName: TfpgString);
-    procedure   FindText(TextToFind: TfpgString; FindOptions: TfpgFindOptions; Backward: Boolean);
+    procedure   FindText(TextToFind: TfpgString; FindOptions: TfpgFindOptions; Backward: Boolean = False);
+    property    CaretPos_H: Integer read GetCaretPosH write SetCaretPosH;
+    property    CaretPos_V: Integer read GetCaretPosV write SetCaretPosV;
     property    FontHeight: Integer read FChrH;
     property    FontWidth: Integer read FChrW;
     property    ScrollPos_H: Integer read GetHScrollPos write SetHScrollPos;
@@ -209,6 +220,7 @@ type
     property    GutterVisible;
     property    GutterShowLineNumbers;
     property    Lines;
+    property    RightEdge;
     property    ScrollBarStyle;
     property    TabWidth;
     property    Tracking;
@@ -412,6 +424,16 @@ begin
   Result := VPos;
 end;
 
+function TfpgBaseTextEdit.GetCaretPosH: Integer;
+begin
+  Result := CaretPos.Y;
+end;
+
+function TfpgBaseTextEdit.GetCaretPosV: Integer;
+begin
+  Result := CaretPos.X;
+end;
+
 procedure TfpgBaseTextEdit.SetFontDesc(const AValue: string);
 begin
   FFont.Free;
@@ -447,6 +469,16 @@ begin
     Exit; //==>
   end;
   FTabWidth := AValue;
+end;
+
+procedure TfpgBaseTextEdit.SetCaretPosH(const AValue: integer);
+begin
+  CaretPos.Y := AValue;
+end;
+
+procedure TfpgBaseTextEdit.SetCaretPosV(const AValue: integer);
+begin
+  CaretPos.X := AValue;
 end;
 
 procedure TfpgBaseTextEdit.SetVScrollPos(const AValue: Integer);
@@ -660,7 +692,7 @@ end;
   to set selection if Shift key is pressed. }
 procedure TfpgBaseTextEdit.KeyboardCaretNav(const ShiftState: TShiftState; const AKeyCode: Word);
 var
-  SaveXCaret: Integer;
+  SaveYCaretOffset: Integer;
 
   procedure CtrlKeyLeftKey;
   var
@@ -965,6 +997,8 @@ begin
               CaretPos.Y := 0;
               CaretPos.X := 0;
             end;
+            ScrollPos_V := 0;
+            UpdateScrollBars;
             Exit;
           end;
           if ssShift in ShiftState then
@@ -1011,6 +1045,8 @@ begin
               CaretPos.Y := pred(FLines.Count);
               CaretPos.X := Length(FLines[CaretPos.Y]);
             end;
+            ScrollPos_V := CaretPos.Y - FVisLines;
+            UpdateScrollBars;
             Exit;
           end;
           if ssShift in ShiftState then
@@ -1042,7 +1078,7 @@ begin
             FSelStartNo := CaretPos.Y;
             FSelStartOffs := CaretPos.X;
           end;
-          SaveXCaret := CaretPos.Y - FTopLine;
+          SaveYCaretOffset := CaretPos.Y - FTopLine;
           if AKeyCode = keyPageUp then
           begin
             if VPos = 0 then
@@ -1056,15 +1092,15 @@ begin
               if FVScrollBar.Visible then
                 FVScrollBar.PageUp;
               // restore caret at same line offset as before
-              CaretPos.Y := FTopLine + SaveXCaret;
+              CaretPos.Y := FTopLine + SaveYCaretOffset;
             end;
           end
           else
-          begin
+          begin  { PageDown handling }
             if VPos > (FLines.Count - FVisLines) then
             begin
               CaretPos.Y := FLines.Count-1;
-              CaretPos.X := Length(FLines[CaretPos.Y]);
+              CaretPos.X := UTF8Length(FLines[CaretPos.Y]);
             end
             else
             begin
@@ -1072,7 +1108,7 @@ begin
               if FVScrollBar.Visible then
                 FVScrollBar.PageDown;
               // restore caret at same line offset as before
-              CaretPos.Y := FTopLine + SaveXCaret;
+              CaretPos.Y := FTopLine + SaveYCaretOffset;
             end;
           end;
           if ssShift in ShiftState then
@@ -1485,6 +1521,28 @@ begin
   end;
 end;
 
+procedure TfpgBaseTextEdit.CopyToClipboard;
+begin
+  if not FSelected then
+    Exit;
+  fpgClipboard.Text := GetSelectedText;
+end;
+
+procedure TfpgBaseTextEdit.CutToClipboard;
+begin
+  if not FSelected then
+    Exit;
+  CopyToClipboard;
+  DeleteSelection;
+end;
+
+procedure TfpgBaseTextEdit.PasteFromClipboard;
+begin
+  if FSelected then
+    DeleteSelection;
+  InsertTextAtPos(fpgClipboard.Text, CaretPos.X, CaretPos.Y);
+end;
+
 procedure TfpgBaseTextEdit.HandleMouseScroll(x, y: integer; shiftstate: TShiftState;
     delta: smallint);
 var
@@ -1515,7 +1573,6 @@ var
   Y: Integer;
   X: Integer;
   CaretScroll: Boolean;
-  HasChanged: boolean;
 begin
   {$IFDEF gDEBUG}
   SendMethodEnter('TfpgBaseTextEdit.HandleKeyPress')
@@ -1525,20 +1582,18 @@ begin
   case CheckClipboardKey(keycode, shiftstate) of
     ckCopy:
       begin
-//        DoCopy;
+        CopyToClipboard;
       end;
 
     ckPaste:
       begin
-//        DoPaste(fpgClipboard.Text);
 //        if not ReadOnly then
-//          HasChanged := True;
+          PasteFromClipboard;
       end;
 
     ckCut:
       begin
-//        DoCopy;
-//        DeleteSection;
+        CutToClipboard;
       end;
   end;
 
@@ -1649,20 +1704,27 @@ begin
           if CaretPos.Y > pred(FLines.Count) then
             Exit;
           SLine := FLines[CaretPos.Y];
-          if Length(SLine) >= CaretPos.X + 1 then
+          if SLine = '' then  // short circut the code block
           begin
-            X := CaretPos.X + 1;
-            Delete(SLine, X, 1);
-            FLines[CaretPos.Y] := SLine;
+            FLines.Delete(CaretPos.Y);
+            FVScrollBar.Max := FVScrollBar.Max - 1;
           end
           else
           begin
-            if CaretPos.Y + 1 > pred(FLines.Count) then
-              Exit;
-            AddS := FLines[CaretPos.Y + 1];
-            FLines[CaretPos.Y] := SLine + AddS;
-            FLines.Delete(CaretPos.Y + 1);
-            DrawVisible;
+            if Length(SLine) >= CaretPos.X + 1 then
+            begin
+              X := CaretPos.X + 1;
+              Delete(SLine, X, 1);
+              FLines[CaretPos.Y] := SLine;
+            end
+            else
+            begin
+              if CaretPos.Y + 1 > pred(FLines.Count) then
+                Exit;
+              AddS := FLines[CaretPos.Y + 1];
+              FLines[CaretPos.Y] := SLine + AddS;
+              FLines.Delete(CaretPos.Y + 1);
+            end;
           end;
           consumed := True;
         end;
@@ -2112,6 +2174,100 @@ begin
   Invalidate;
 end;
 
+procedure TfpgBaseTextEdit.InsertTextAtPos(S: TfpgString; Col, Row: Integer);
+var
+  SLine, BufS1, BufS2, BufS: TfpgString;
+  I, L: Integer;
+begin
+  if S = '' then
+    Exit;
+  if Row > FLines.Count then
+    Exit;
+  if Row = FLines.Count then
+    FLines.Add('');
+  SLine := FLines[Row];
+  if Col > UTF8Length(SLine) then
+  begin
+    L := UTF8Length(SLine);
+    for I := L to Col do
+      SLine := Sline + ' ';
+  end;
+  BufS1 := Copy(SLine, 1, Col);
+  BufS2 := Copy(SLine, Col + 1, Length(SLine) - Col);
+  SLine := BufS1 + S + BufS2;
+  FSelected := True;
+  { Handles both Windows and *nix line endings - maybe there is a better way? }
+  I := pos(#13#10, SLine);
+  if I > 0 then
+  begin
+    BufS := '';
+    FSelStartNo := Row;
+    FSelStartOffs := Length(BufS1);
+    while I > 0 do
+    begin
+      BufS := Copy(SLine, 1, I - 1);
+      FLines.Insert(Row, BufS);
+      Delete(SLine, 1, I+1);
+      I := pos(#13#10, SLine);
+      CaretPos.Y := Row;
+      CaretPos.X := Length(BufS);
+      FSelEndNo := Row;
+      FSelEndOffs := CaretPos.X;
+      Row := Row + 1;
+    end;
+    if SLine <> '' then
+    begin
+      FLines[Row] := SLine;
+      CaretPos.Y := Row;
+      CaretPos.X := Length(SLine) - Length(BufS2);
+      FSelEndNo := Row;
+      FSelEndOffs := CaretPos.X;
+    end;
+    Invalidate;
+  end
+  else
+  begin
+    I := pos(#10, SLine);
+    if I > 0 then
+    begin
+      BufS := '';
+      FSelStartNo := Row;
+      FSelStartOffs := Length(BufS1);
+      while I > 0 do
+      begin
+        BufS := Copy(SLine, 1, I - 1);
+        FLines.Insert(Row, BufS);
+        Delete(SLine, 1, I);
+        I := pos(#10, SLine);
+        CaretPos.Y := Row;
+        CaretPos.X := Length(BufS);
+        FSelEndNo := Row;
+        FSelEndOffs := CaretPos.X;
+        Row := Row + 1;
+      end;
+      if SLine <> '' then
+      begin
+        FLines[Row] := SLine;
+        CaretPos.Y := Row;
+        CaretPos.X := Length(SLine) - Length(BufS2);
+        FSelEndNo := Row;
+        FSelEndOffs := CaretPos.X;
+      end;
+      Invalidate;
+    end else
+    begin
+      CaretPos.Y := Row;
+      FLines[Row] := SLine;
+      CaretPos.X := Col + Length(S);
+      FSelStartNo := Row;
+      FSelEndNo := Row;
+      FSelStartOffs := Length(BufS1);
+      FSelEndOffs := CaretPos.X;
+      Invalidate;
+    end;
+  end;
+end;
+
 procedure TfpgBaseTextEdit.ScrollTo(X, Y: Integer);
 begin
   SetVPos(Y div FChrH);
@@ -2176,6 +2332,59 @@ begin
 
   UpdateScrollbars;
   Invalidate;
+end;
+
+function TfpgBaseTextEdit.GetSelectedText: TfpgString;
+var
+  StartLine, StartPos, EndLine, EndPos, I, LineI: Integer;
+  FirstPart, LastPart, SLine: string;
+begin
+  Result := '';
+  if not FSelected then Exit;
+  if not FSelected then Exit;
+  if FSelStartNo > FSelEndNo then
+  begin
+    StartLine := FSelEndNo;
+    StartPos := FSelEndOffs;
+    EndLine := FSelStartNo;
+    EndPos := FSelStartOffs;
+  end
+  else
+  begin
+    if (FSelStartNo = FSelEndNo) and (FSelEndOffs < FSelStartOffs) then
+    begin
+      StartLine := FSelStartNo;
+      StartPos := FSelEndOffs;
+      EndLine := StartLine;
+      EndPos := FSelStartOffs;
+    end
+    else
+    begin
+      StartLine := FSelStartNo;
+      StartPos := FSelStartOffs;
+      EndLine := FSelEndNo;
+      EndPos := FSelEndOffs;
+    end;
+  end;
+  if StartLine > pred(FLines.Count) then Exit;
+  if EndLine > pred(FLines.Count) then
+    EndLine := pred(FLines.Count);
+  SLine := FLines[StartLine];
+  if StartLine < EndLine then
+  begin
+    FirstPart := Copy(SLine, StartPos + 1, Length(SLine) - StartPos);
+    SLine := FLines[EndLine];
+    if EndPos > Length(SLine) then
+      EndPos := Length(SLine);
+    LastPart := Copy(SLine, 1, EndPos);
+    LineI := StartLine + 1;
+    Result := FirstPart;
+    for I := LineI to (EndLine - 1) do
+      Result := Result + LineEnding + FLines[I];
+    Result := Result + LineEnding + LastPart;
+  end
+  else
+    Result := Copy(SLine, StartPos + 1, EndPos - StartPos);
 end;
 
 procedure TfpgBaseTextEdit.SaveToFile(const AFileName: TfpgString);

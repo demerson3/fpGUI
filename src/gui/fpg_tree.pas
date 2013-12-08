@@ -46,7 +46,7 @@ uses
   fpg_imagelist,
   fpg_scrollbar,
   fpg_menu;
-  
+
 type
 
   TfpgNodeAttachMode = (naAdd, naAddFirst, naAddChild, naAddChildFirst, naInsert);
@@ -56,11 +56,11 @@ type
     next: PfpgTreeColumnWidth;
     width: word;
   end;
-  
+
   // forward declaration
   TfpgTreeView = class;
   TfpgTreeNode = class;
-  
+
   TfpgTreeNodeFindMethod = procedure(ANode: TfpgTreeNode; var AFound: boolean) of object;
   TfpgTreeExpandEvent = procedure(Sender: TObject; ANode: TfpgTreeNode) of object;
   TfpgStateImageClickedEvent = procedure(Sender: TObject; ANode: TfpgTreeNode) of object;
@@ -146,8 +146,8 @@ type
     property    SelTextColor: TfpgColor read FSelTextColor write SetSelTextColor;
     property    TextColor: TfpgColor read FTextColor write SetTextColor;
   end;
-  
-  
+
+
   TfpgTreeView = class(TfpgWidget)
   private
     FImageList: TfpgImageList;
@@ -229,6 +229,7 @@ type
     procedure   SetColumnWidth(AIndex, AWidth: word);
     // the width of a column - aIndex of the rootnode = 0
     function    GetColumnWidth(AIndex: word): word;
+    function    GetNodeAt(const X, Y: integer): TfpgTreeNode;
     procedure   GotoNextNodeUp;
     procedure   GotoNextNodeDown;
     procedure   FullCollapse;
@@ -272,7 +273,7 @@ type
     property    OnShowHint;
     property    OnStateImageClicked: TfpgStateImageClickedEvent read FOnStateImageClicked write FOnStateImageClicked;
   end;
-  
+
 
 implementation
 
@@ -864,6 +865,7 @@ begin
   begin
     FRootNode := TfpgTreeNode.Create;
     FRootNode.FTree := self;
+    FRootNode.Collapsed := False;
   end;
   FRootNode.TextColor     := clText1;
   FRootnode.SelTextColor  := clSelectionText;
@@ -929,7 +931,7 @@ begin
         UpdateScrollBars;
       end;
     end;
-    
+
     if dy - FVScrollbar.Position < 0 then
     begin
       FVScrollbar.Position := dy;
@@ -1201,6 +1203,56 @@ begin
     result := DefaultColumnWidth;
 end;
 
+function TfpgTreeView.GetNodeAt(const X, Y: integer): TfpgTreeNode;
+var
+  col: integer;
+  lTop: integer;
+  lLeft: integer;
+  i, i1: integer;
+  cancel: boolean;
+  last, node: TfpgTreeNode;
+  w: integer;
+  lNodeXOffset: integer;
+begin
+  if ShowColumns then
+    col := FColumnHeight
+  else
+    col := 0;
+
+  Result := nil;
+  i := 0;
+  lTop := y - col - 1 + FYOffset;
+  lLeft := x + FXOffset;
+  cancel := False;
+  last := RootNode;
+
+  while not ((((i - 1) * GetNodeHeight) <= lTop) and ((i * GetNodeHeight) >= lTop)) do
+  begin
+    node := NextVisualNode(last);
+    if node = nil then
+      exit; //==>
+    if node = last then
+    begin
+      cancel := True;
+      break;  //==>
+    end;
+    inc(i);
+    last := node;
+  end;
+
+  if (not cancel) or (node <> nil) then
+  begin
+    // +/- or node-selection?
+    i1  := StepToRoot(node);
+    w   := GetColumnLeft(i1);
+    lNodeXOffset := w - GetColumnWidth(i1) div 2 + 6;
+    if lLeft > lNodeXOffset then  { we are in the actual treenode area }
+    begin
+      Result := node;
+    end;
+  end;
+end;
+
 procedure TfpgTreeView.GotoNextNodeUp;
 begin
   if Selection = RootNode.FirstSubNode then
@@ -1314,16 +1366,18 @@ begin
 end;
 
 procedure TfpgTreeview.ResetScrollbar;
+const
+  cSBarThickness = 16;
 begin
   {$IFDEF DEBUG}
   SendDebug(Classname + '.ResetScrollbar');
   {$ENDIF}
   UpdateScrollBars;
   if FHScrollbar.Visible then
-    FVScrollbar.SetPosition(Width - 19, 1, 18, Height - 2 - 18)
+    FVScrollbar.SetPosition(Width - cSBarThickness-1, 1, cSBarThickness, Height - 2 - cSBarThickness)
   else
-    FVScrollbar.SetPosition(Width - 19, 1, 18, Height - 2);
-  FHScrollbar.SetPosition(1, Height - 19, Width - 2, 18);
+    FVScrollbar.SetPosition(Width - cSBarThickness-1, 1, 16, Height - 2);
+  FHScrollbar.SetPosition(1, Height - cSBarThickness-1, Width - 2, cSBarThickness);
 end;
 
 procedure TfpgTreeView.ClearColumnLeft;
@@ -1406,7 +1460,7 @@ begin
       inc(i);
       last := node;
     end;
-    
+
     if (not cancel) or (node <> nil) then
     begin
       // +/- or node-selection?
@@ -1691,7 +1745,7 @@ begin
         Canvas.SetColor(FTreeLineColor);
         Canvas.SetLineStyle(1, lsSolid);  // rectangle is always solid line style
         Canvas.DrawRectangle(w - FXOffset - GetColumnWidth(i1) div 2 - 3, ACenterPos - 3, 9, 9);
-        
+
         Canvas.SetColor(clText1);
 
         if h.Collapsed {or h.HasChildren} then
@@ -1705,7 +1759,7 @@ begin
           // draw a "-"
           Canvas.DrawLine(w - FXOffset - GetColumnWidth(i1) div 2 - 1, ACenterPos + 1, w - FXOffset - GetColumnWidth(i1) div 2 + 4, ACenterPos + 1);
         end;
-        
+
         Canvas.SetLineStyle(1, FTreeLineStyle);
       end
       else
@@ -1747,12 +1801,12 @@ begin
           Canvas.DrawLine(w - FXOffset - GetColumnWidth(i1) div 2 + 1, ACenterPos, w - FXOffset - GetColumnWidth(i1) div 2 + 1, ACenterPos - GetNodeHeight div 2 + 3);
       end;
     end;
-    
+
     if ShowColumns then
       i := ACenterPos
     else
       i := ACenterPos + GetNodeHeight;
-    
+
     if AVisibleHeight > i then
     begin
       if (h.count > 0) and (not h.Collapsed) then
@@ -1824,74 +1878,77 @@ var
   OldSelection: TfpgTreeNode;
 begin
   OldSelection := Selection;
-  case KeyCode of
-    keyRight:
-      begin
-        Consumed := True;
-        Selection.Expand;
-        DoExpand(Selection);
-        ResetScrollbar;
-        RePaint;
-      end;
-      
-    keyLeft:
-      begin
-        Consumed := True;
-        Selection.Collapsed := true;
-        ResetScrollbar;
-        RePaint;
-      end;
-      
-    keyUp:
-      begin
-        if Selection = nil then
-          Selection := RootNode.FirstSubNode
-        else
-          if Selection <> RootNode then
+  if ShiftState = [] then
+  begin
+    case KeyCode of
+      keyRight:
+        begin
+          Consumed := True;
+          Selection.Expand;
+          DoExpand(Selection);
+          ResetScrollbar;
+          RePaint;
+        end;
+
+      keyLeft:
+        begin
+          Consumed := True;
+          Selection.Collapsed := true;
+          ResetScrollbar;
+          RePaint;
+        end;
+
+      keyUp:
+        begin
+          if Selection = nil then
+            Selection := RootNode.FirstSubNode
+          else
+            if Selection <> RootNode then
+            begin
+              if NodeIsVisible(selection) then
+              begin
+                h := PrevVisualNode(Selection);
+                if (h <> RootNode) and (h <> nil) then
+                  Selection := h;
+              end
+              else
+              begin
+                Selection := RootNode.FirstSubNode;
+              end;
+            end;
+            Consumed := True;
+        end;
+
+      keyDown:
+        begin
+          Consumed := True;
+          if Selection = nil then
+            Selection := RootNode.FirstSubNode
+          else
           begin
             if NodeIsVisible(selection) then
             begin
-              h := PrevVisualNode(Selection);
-              if (h <> RootNode) and (h <> nil) then
+              h := NextVisualNode(Selection);
+              if (h <> nil) then
                 Selection := h;
             end
             else
-            begin
               Selection := RootNode.FirstSubNode;
-            end;
           end;
-          Consumed := True;
-      end;
-      
-    keyDown:
-      begin
-        Consumed := True;
-        if Selection = nil then
-          Selection := RootNode.FirstSubNode
-        else
-        begin
-          if NodeIsVisible(selection) then
-          begin
-            h := NextVisualNode(Selection);
-            if (h <> nil) then
-              Selection := h;
-          end
-          else
-            Selection := RootNode.FirstSubNode;
         end;
-      end;
 
-    keyPageUp:
-      begin
-        FVScrollbar.PageUp;
-      end;
+      keyPageUp:
+        begin
+          FVScrollbar.PageUp;
+        end;
 
-    keyPageDown:
-      begin
-        FVScrollbar.PageDown;
-      end;
-    else
-      Consumed := False;
+      keyPageDown:
+        begin
+          FVScrollbar.PageDown;
+        end;
+      else
+        Consumed := False;
+    end;
   end;
 
   if Selection <> OldSelection then
@@ -2144,6 +2201,7 @@ begin
   FHScrollbar.Visible     := False;
   FHScrollbar.Position    := 0;
   FHScrollbar.SliderSize  := 0.5;
+
   
   FVScrollbar := TfpgScrollbar.Create(self);
   FVScrollbar.Orientation := orVertical;
@@ -2151,6 +2209,7 @@ begin
   FVScrollbar.Visible     := False;
   FVScrollbar.Position    := 0;
   FVScrollbar.SliderSize  := 0.2;
+
   
   FBackgroundColor  := clListBox;
   FTreeLineColor    := clShadow1; //clText1;

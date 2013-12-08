@@ -46,7 +46,7 @@ msgstr "Toutes les polices"
 
 #: fpg_constants:rskeyalt
 msgid "Alt+"
-msgstr ""
+msgstr "Alt+"
 
 #: fpg_constants:rsantialiasing
 msgid "Anti aliasing"
@@ -142,7 +142,7 @@ msgstr "Erreur critique"
 
 #: fpg_constants:rskeyctrl
 msgid "Ctrl+"
-msgstr ""
+msgstr "Ctrl+"
 
 #: fpg_constants:rscut
 msgid "Cut"
@@ -224,9 +224,13 @@ msgstr "Sortir"
 msgid "Failed to create the directory <%s>"
 msgstr "Le répertoire <%s> n''a pas pu être ouvert"
 
+#: fpg_constants:rsfailedtofindhelpviewer
+msgid "Failed to find the help viewer."
+msgstr "Visualiseur d'aide non trouvé"
+
 #: fpg_constants:rsfalse
 msgid "False"
-msgstr "False"
+msgstr "Faux"
 
 #: fpg_constants:rscollectionfavourites
 msgid "Favourites"
@@ -264,6 +268,10 @@ msgstr "Longueur fixe"
 msgid "Font Aliases"
 msgstr "Alias"
 
+#: fpg_constants:rserrreportfontfilemissing
+msgid "Font file <%s.fnt> not found"
+msgstr "Fichier de police <%s.fnt> non trouvé"
+
 #: fpg_constants:rsshortfri
 msgid "Fri"
 msgstr "Ven"
@@ -287,6 +295,10 @@ msgstr ""
 #: fpg_constants:rsignore
 msgid "Ignore"
 msgstr "Ignorer"
+
+#: fpg_constants:rserrreportimagefilemissing
+msgid "Image <%s> is missing"
+msgstr "Image <%s> introuvable"
 
 #: fpg_constants:rsinformation
 msgid "Information"
@@ -362,7 +374,7 @@ msgstr "Message"
 
 #: fpg_constants:rskeymeta
 msgid "Meta+"
-msgstr ""
+msgstr "Meta+"
 
 #: fpg_constants:rsfilemodifiedtime
 msgid "Mod. Time"
@@ -428,6 +440,14 @@ msgstr "Ouvrir un fichier"
 msgid "Owner"
 msgstr "Propriétaire"
 
+#: fpg_constants:rsfiletypepdf
+msgid "PDF Documents"
+msgstr "Documents PDF"
+
+#: fpg_constants:rsreportpage
+msgid "Page"
+msgstr "Page"
+
 #: fpg_constants:rspassword
 msgid "Password"
 msgstr "Mot de passe"
@@ -443,6 +463,10 @@ msgstr ""
 #: fpg_constants:rskeypgup
 msgid "PgUp"
 msgstr ""
+
+#: fpg_constants:rsreportpreview
+msgid "Preview"
+msgstr "Prévisualisation"
 
 #: fpg_constants:rscollectionrecentlyused
 msgid "Recently Used"
@@ -487,6 +511,10 @@ msgstr "Sauver sous"
 #: fpg_constants:rssearch
 msgid "Search"
 msgstr "Chercher"
+
+#: fpg_constants:rsreportsection
+msgid "Section"
+msgstr "Section"
 
 #: fpg_constants:rsselect
 msgid "Select"
@@ -547,6 +575,10 @@ msgstr ""
 #: fpg_constants:rstexttoinsert
 msgid "Text to Insert"
 msgstr "Texte à insérer"
+
+#: fpg_constants:rserrreportnopagestoprint
+msgid "There are no pages to print"
+msgstr "Il n'y a pas de page à imprimer"
 
 #: fpg_constants:rsshortthu
 msgid "Thu"
@@ -615,4 +647,8 @@ msgstr "Oui"
 #: fpg_constants:rsyestoall
 msgid "Yes to All"
 msgstr "Oui à tous"
+
+#: fpg_constants:rsreportpageof
+msgid "of"
+msgstr "de"
 

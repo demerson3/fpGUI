@@ -1,3 +1,19 @@
+{
+    fpGUI IDE - Maximus
+
+    Copyright (C) 2012 - 2013 Graeme Geldenhuys
+
+    See the file COPYING.modifiedLGPL, included in this distribution,
+    for details about redistributing fpGUI.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Description:
+      ---
+}
+
 unit frm_projectoptions;
 
 {$mode objfpc}{$H+}
@@ -34,7 +50,6 @@ type
     CheckBox1: TfpgCheckBox;
     Label6: TfpgLabel;
     cbDefaultMakeCol: TfpgComboBox;
-    Button1: TfpgButton;
     pcCompiler: TfpgPageControl;
     TabSheet1: TfpgTabSheet;
     TabSheet2: TfpgTabSheet;
@@ -86,8 +101,8 @@ type
     procedure SetupCellEdit(AGrid: TfpgStringGrid);
     procedure CleanupCompilerMakeOptionsGrid;
     procedure CleanupCompilerDirs;
+    procedure CleanupUserMacrosGrid;
     procedure SaveToMacroList(AList: TIDEMacroList);
-
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -215,12 +230,9 @@ end;
 procedure TProjectOptionsForm.grdCompilerDirsKeyPressed(Sender: TObject;
   var KeyCode: word; var ShiftState: TShiftState; var Consumed: boolean);
 begin
-  if (KeyCode = keyInsert) and (ssCtrl in ShiftState) then
-  begin
-    TfpgStringGrid(Sender).RowCount := TfpgStringGrid(Sender).RowCount + 1;
-    Consumed := True;
+  CheckGridModifyKeyPresses(Sender, KeyCode, ShiftState, Consumed);
+  if Consumed then
     Exit;
-  end;
 
   if TfpgStringGrid(Sender).FocusCol < 10 then
   begin
@@ -244,12 +256,9 @@ end;
 procedure TProjectOptionsForm.grdCompilerMakeOptionsKeyPressed(Sender: TObject;
   var KeyCode: word; var ShiftState: TShiftState; var Consumed: boolean);
 begin
-  if (KeyCode = keyInsert) and (ssCtrl in ShiftState) then
-  begin
-    TfpgStringGrid(Sender).RowCount := TfpgStringGrid(Sender).RowCount + 1;
-    Consumed := True;
+  CheckGridModifyKeyPresses(Sender, KeyCode, ShiftState, Consumed);
+  if Consumed then
     Exit;
-  end;
 
   if TfpgStringGrid(Sender).FocusCol < 6 then
   begin
@@ -455,6 +464,13 @@ begin
         grdCompilerDirs.Cells[j, i] := cCheck;
     end;
   end;
+
+  grdUserMacros.RowCount := GProject.MacroNames.Count;
+  for i := 0 to GProject.MacroNames.Count-1 do
+  begin
+    grdUserMacros.Cells[6, i] := GProject.MacroNames.Names[i];
+    grdUserMacros.Cells[7, i] := GProject.MacroNames.ValueFromIndex[i];
+  end;
 end;
 
 procedure TProjectOptionsForm.SaveSettings;
@@ -491,6 +507,13 @@ begin
       if grdCompilerDirs.Cells[j, i] = cCheck then
         GProject.UnitDirsGrid[j, i] := True;
     end;
+  end;
+
+  CleanupUserMacrosGrid;
+  GProject.ClearAndInitMacrosGrid(grdUserMacros.RowCount);
+  for i := 0 to grdUserMacros.RowCount-1 do
+  begin
+    GProject.MacroNames.Values[grdUserMacros.Cells[6, i]] := grdUserMacros.Cells[7, i];
   end;
 end;
 
@@ -539,6 +562,18 @@ begin
   begin
     if Trim(grdCompilerDirs.Cells[10, i]) = '' then
       grdCompilerDirs.DeleteRow(i);
+  end;
+end;
+
+// remove all rows that have empty macro names or values
+procedure TProjectOptionsForm.CleanupUserMacrosGrid;
+var
+  i: integer;
+begin
+  for i := grdUserMacros.RowCount-1 downto 0 do
+  begin
+    if (Trim(grdUserMacros.Cells[6, i]) = '') or (Trim(grdUserMacros.Cells[7, i]) = '') then
+      grdUserMacros.DeleteRow(i);
   end;
 end;
 
@@ -795,19 +830,6 @@ begin
     Items.Add('4 (Make 4)');
     TabOrder := 6;
     FocusItem := 0;
-  end;
-
-  Button1 := TfpgButton.Create(tsCompiler);
-  with Button1 do
-  begin
-    Name := 'Button1';
-    SetPosition(148, 290, 144, 24);
-    Anchors := [anLeft,anBottom];
-    Text := 'Show command line';
-    FontDesc := '#Label1';
-    Hint := '';
-    ImageName := '';
-    TabOrder := 14;
   end;
 
   pcCompiler := TfpgPageControl.Create(tsCompiler);

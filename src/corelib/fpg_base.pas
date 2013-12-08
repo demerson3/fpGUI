@@ -19,6 +19,12 @@ unit fpg_base;
 
 {$mode objfpc}{$H+}
 
+// To enable the AggPas powered Canvas
+{.$define AGGCanvas}
+
+// For debug use only
+{.$define GDEBUG}
+
 interface
 
 uses
@@ -26,30 +32,30 @@ uses
   SysUtils,
   fpg_impl,
   syncobjs, // TCriticalSection usage
-  URIParser, variants, contnrs;
+  variants, contnrs;
 
 type
   TfpgCoord       = integer;     // we might use floating point coordinates in the future...
-  TfpgColor       = type longword;    // Always in RRGGBB (Alpha, Red, Green, Blue) format!!
-  TfpgString      = type string;
-  TfpgChar        = type string[4];
+  TfpgColor       = type longword;    // Always in AARRGGBB (Alpha, Red, Green, Blue) format!!
+  TfpgString      = type AnsiString;
+  TfpgChar        = type String[4];
 
   PPoint = ^TPoint;
 
-  TRGBTriple = record
-    Red: word;
-    Green: word;
-    Blue: word;
-    Alpha: word;
-  end deprecated;
+  TRGBTriple = packed record
+    Red: byte;
+    Green: byte;
+    Blue: byte;
+    Alpha: byte;
+  end;
 
   // Same declaration as in FPImage unit, but we don't use FPImage yet, so declare it here
   TFPColor = record
-    Red: word;
-    Green: word;
-    Blue: word;
-    Alpha: word;
-  end;
+    Red: byte;
+    Green: byte;
+    Blue: byte;
+    Alpha: byte;
+  end deprecated;
 
   TWindowType = (wtChild, wtWindow, wtModalForm, wtPopup);
 
@@ -71,12 +77,19 @@ type
 
   // If you have to convert this to an Integer, mrNone = 0 etc.
   TfpgModalResult = (mrNone, mrOK, mrCancel, mrYes, mrNo, mrAbort, mrRetry,
-      mrIgnore, mrAll, mrNoToAll, mrYesToAll);
+      mrIgnore, mrAll, mrNoToAll, mrYesToAll, mrHelp);
 
   TfpgDropAction = (daIgnore, daCopy, daMove, daLink, daAsk);
   TfpgDropActions = set of TfpgDropAction;
 
   TfpgEditBorderStyle = (ebsNone, ebsDefault, ebsSingle);
+
+  // in case we wanted to trap any fpGUI specific exceptions
+  EfpGUIException = class(Exception);
+
+  // For providing user feedback. No need to display backtrace information
+  EfpGUIUserFeedbackException = class(EfpGUIException);
+
 
 
 const
@@ -106,6 +119,7 @@ const
   FPGM_FREEME      = 19;
   FPGM_DROPENTER   = 20;
   FPGM_DROPEXIT    = 21;
+  FPGM_HSCROLL      = 22;
   FPGM_USER        = 50000;
   FPGM_KILLME      = MaxInt;
 
@@ -208,6 +222,8 @@ type
   TfpgCanvasBase = class;
 
 
+  { TfpgImageBase }
+
   TfpgImageBase = class(TObject)
   private
     function    GetColor(x, y: TfpgCoord): TfpgColor;
@@ -221,24 +237,28 @@ type
     FImageDataSize: integer;
     FMaskData: pointer;
     FMaskDataSize: integer;
+    FMaskWidth: integer;
     FMaskPoint: TPoint;
     procedure   DoFreeImage; virtual; abstract;
     procedure   DoInitImage(acolordepth, awidth, aheight: integer; aimgdata: Pointer); virtual; abstract;
-    procedure   DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer); virtual; abstract;
+    procedure   DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer); virtual; abstract;
   public
     constructor Create;
     destructor  Destroy; override;
     procedure   Invert(IncludeMask: Boolean = False);
     procedure   FreeImage;
+    procedure   FreeMask;
     procedure   AllocateImage(acolordepth, awidth, aheight: integer);
     procedure   AllocateMask;
     procedure   CreateMaskFromSample(x, y: TfpgCoord);
     { Must always be called AFTER you populated the ImageData array. Then only does it allocate OS resources. }
     procedure   UpdateImage;
+    { Internal representation of color data is always ARGB }
     property    ImageData: pointer read FImageData;
     property    ImageDataSize: integer read FImageDataSize;
     property    MaskData: pointer read FMaskData;
     property    MaskDataSize: integer read FMaskDataSize;
+    property    MaskWidth: integer read FMaskWidth;
     property    Width: integer read FWidth;
     property    Height: integer read FHeight;
     property    ColorDepth: integer read FColorDepth;
@@ -352,7 +372,7 @@ type
     procedure   DoFillArc(x, y, w, h: TfpgCoord; a1, a2: Extended); virtual; abstract;
     procedure   DoDrawPolygon(Points: PPoint; NumPts: Integer; Winding: boolean = False); virtual; abstract;
   public
-    constructor Create; virtual;
+    constructor Create(awin: TfpgWindowBase); virtual;
     destructor  Destroy; override;
     procedure   DrawRectangle(x, y, w, h: TfpgCoord); overload;
     procedure   DrawRectangle(r: TfpgRect); overload;
@@ -378,6 +398,7 @@ type
     procedure   XORFillRectangle(col: TfpgColor; r: TfpgRect); overload;
     procedure   SetClipRect(const ARect: TfpgRect);
     function    GetClipRect: TfpgRect;
+    function    GetLineWidth: integer;
     procedure   AddClipRect(const ARect: TfpgRect);
     procedure   ClearClipRect;
     procedure   Clear(AColor: TfpgColor);
@@ -399,8 +420,9 @@ type
     property    InterpolationFilter: TfpgCustomInterpolation read FInterpolation write SetInterpolation;
     property    FastDoubleBuffer: Boolean read FFastDoubleBuffer write FFastDoubleBuffer;
     property    LineStyle: TfpgLineStyle read FLineStyle;
-    property    LineWidth: integer read FLineWidth;
   end;
+
+  TfpgCanvasBaseClass = class of TfpgCanvasBase;
 
 
   TfpgComponent = class(TComponent)
@@ -733,16 +755,19 @@ function  KeycodeToText(AKey: Word; AShiftState: TShiftState): string;
 function  CheckClipboardKey(AKey: Word;  AShiftstate: TShiftState): TClipboardKeyType;
 
 { Color }
-function  fpgColorToRGBTriple(const AColor: TfpgColor): TRGBTriple; deprecated;
-function  fpgColorToFPColor(const AColor: TfpgColor): TFPColor;
-function  RGBTripleTofpgColor(const AColor: TRGBTriple): TfpgColor; deprecated;
-function  FPColorTofpgColor(const AColor: TFPColor): TfpgColor;
-function  fpgGetRed(const AColor: TfpgColor): word;
-function  fpgGetGreen(const AColor: TfpgColor): word;
-function  fpgGetBlue(const AColor: TfpgColor): word;
-function  fpgGetAlpha(const AColor: TfpgColor): word;
+function  fpgColorToRGBTriple(const AColor: TfpgColor): TRGBTriple;
+function  fpgColorToFPColor(const AColor: TfpgColor): TFPColor; deprecated;
+function  RGBTripleTofpgColor(const AColor: TRGBTriple): TfpgColor;
+function  FPColorTofpgColor(const AColor: TFPColor): TfpgColor; deprecated;
+function  fpgGetRed(const AColor: TfpgColor): byte;
+function  fpgGetGreen(const AColor: TfpgColor): byte;
+function  fpgGetBlue(const AColor: TfpgColor): byte;
+function  fpgGetAlpha(const AColor: TfpgColor): byte;
 function  fpgGetAvgColor(const AColor1, AColor2: TfpgColor): TfpgColor;
 function  fpgColor(const ARed, AGreen, ABlue: byte): TfpgColor;
+function  fpgColor(const ARed, AGreen, ABlue, AAlpha: byte): TfpgColor;
+function  fpgDarker(const AColor: TfpgColor; APercent: Byte = 50): TfpgColor;
+function  fpgLighter(const AColor: TfpgColor; APercent: Byte = 50): TfpgColor;
 
 
 { Points }
@@ -762,6 +787,9 @@ uses
   fpg_form,  // needed for fpgApplication.CreateForms()
   typinfo,
   process,
+  {$IFDEF GDEBUG}
+  dbugintf,
+  {$ENDIF}
   dateutils;
 
 
@@ -949,91 +977,123 @@ begin
   end  { if/else }
 end;
 
-function fpgColorToRGBTriple(const AColor: TfpgColor): TRGBTriple; deprecated;
+function fpgColorToRGBTriple(const AColor: TfpgColor): TRGBTriple;
 begin
   with Result do
   begin
     Red   := fpgGetRed(AColor);
     Green := fpgGetGreen(AColor);
     Blue  := fpgGetBlue(AColor);
-//    Alpha := fpgGetAlpha(AColor);
+    Alpha := fpgGetAlpha(AColor);
   end
 end;
 
-function fpgColorToFPColor(const AColor: TfpgColor): TFPColor;
+function fpgColorToFPColor(const AColor: TfpgColor): TFPColor; deprecated;
 begin
   with Result do
   begin
     Red   := fpgGetRed(AColor);
     Green := fpgGetGreen(AColor);
     Blue  := fpgGetBlue(AColor);
-//    Alpha := fpgGetAlpha(AColor);
+    Alpha := fpgGetAlpha(AColor);
   end
 end;
 
-function RGBTripleTofpgColor(const AColor: TRGBTriple): TfpgColor; deprecated;
+function RGBTripleTofpgColor(const AColor: TRGBTriple): TfpgColor;
 begin
-  Result := AColor.Blue or (AColor.Green shl 8) or (AColor.Red shl 16);// or (AColor.Alpha shl 32);
+  Result := AColor.Blue or (AColor.Green shl 8) or (AColor.Red shl 16) or (AColor.Alpha shl 24);
 end;
 
-function FPColorTofpgColor(const AColor: TFPColor): TfpgColor;
+function FPColorTofpgColor(const AColor: TFPColor): TfpgColor; deprecated;
 begin
-  Result := AColor.Blue or (AColor.Green shl 8) or (AColor.Red shl 16);// or (AColor.Alpha shl 32);
+  Result := AColor.Blue or (AColor.Green shl 8) or (AColor.Red shl 16) or (AColor.Alpha shl 24);
 end;
 
-function fpgGetRed(const AColor: TfpgColor): word;
+function fpgGetRed(const AColor: TfpgColor): byte;
 var
   c: TfpgColor;
 begin
   c := fpgColorToRGB(AColor);
   // AARRGGBB format
-  Result := Word((c shr 16) and $FF);
+  Result := (c shr 16) and $FF;
 end;
 
-function fpgGetGreen(const AColor: TfpgColor): word;
+function fpgGetGreen(const AColor: TfpgColor): byte;
 var
   c: TfpgColor;
 begin
   c := fpgColorToRGB(AColor);
   // AARRGGBB format
-  Result := Word((c shr 8) and $FF);
+  Result := (c shr 8) and $FF;
 end;
 
-function fpgGetBlue(const AColor: TfpgColor): word;
+function fpgGetBlue(const AColor: TfpgColor): byte;
 var
   c: TfpgColor;
 begin
   c := fpgColorToRGB(AColor);
   // AARRGGBB format
-  Result := Word(c and $FF);
+  Result := c and $FF;
 end;
 
-function fpgGetAlpha(const AColor: TfpgColor): word;
+function fpgGetAlpha(const AColor: TfpgColor): byte;
 var
   c: TfpgColor;
 begin
   c := fpgColorToRGB(AColor);
   // AARRGGBB format
-  Result := Word((c shr 32) and $FF);
+  Result := (c shr 24) and $FF;
 end;
 
 function fpgGetAvgColor(const AColor1, AColor2: TfpgColor): TfpgColor;
 var
-  c1, c2: TFPColor;
-  avg: TFPColor;
+  c1, c2: TRGBTriple;
+  avg: TRGBTriple;
 begin
-  c1 := fpgColorToFPColor(AColor1);
-  c2 := fpgColorToFPColor(AColor2);
+  c1 := fpgColorToRGBTriple(AColor1);
+  c2 := fpgColorToRGBTriple(AColor2);
   avg.Red   := c1.Red + (c2.Red - c1.Red) div 2;
   avg.Green := c1.Green + (c2.Green - c1.Green) div 2;
   avg.Blue  := c1.Blue + (c2.Blue - c1.Blue) div 2;
   avg.Alpha := c1.Alpha + (c2.Alpha - c1.Alpha) div 2;
-  Result := FPColorTofpgColor(avg);
+  Result := RGBTripleTofpgColor(avg);
 end;
 
 function fpgColor(const ARed, AGreen, ABlue: byte): TfpgColor;
 begin
-  Result := ABlue or (AGreen shl 8) or (ARed shl 16);
+  { color is always fully opaque }
+  Result := ABlue or (AGreen shl 8) or (ARed shl 16) or ($FF shl 24);
+end;
+
+function fpgColor(const ARed, AGreen, ABlue, AAlpha: byte): TfpgColor;
+begin
+  Result := ABlue or (AGreen shl 8) or (ARed shl 16) or (AAlpha shl 24);
+end;
+
+function fpgDarker(const AColor: TfpgColor; APercent: Byte): TfpgColor;
+var
+  lColor: TRGBTriple;
+begin
+  lColor.Red := fpgGetRed(AColor);
+  lColor.Green := fpgGetGreen(AColor);
+  lColor.Blue := fpgGetBlue(AColor);
+  lColor.Red := Round(lColor.Red*APercent/100);
+  lColor.Green := Round(lColor.Green*APercent/100);
+  lColor.Blue := Round(lColor.Blue*APercent/100);
+  Result := RGBTripleTofpgColor(lColor);
+end;
+
+function fpgLighter(const AColor: TfpgColor; APercent: Byte): TfpgColor;
+var
+  lColor: TRGBTriple;
+begin
+  lColor.Red := fpgGetRed(AColor);
+  lColor.Green := fpgGetGreen(AColor);
+  lColor.Blue := fpgGetBlue(AColor);
+  lColor.Red := Round((lColor.Red*APercent/100) + (255 - APercent/100*255));
+  lColor.Green := Round((lColor.Green*APercent/100) + (255 - APercent/100*255));
+  lColor.Blue := Round((lColor.Blue*APercent/100) + (255 - APercent/100*255));
+  Result := RGBTripleTofpgColor(lColor);
 end;
 
 function PtInRect(const ARect: TfpgRect; const APoint: TPoint): Boolean;
@@ -1333,7 +1393,7 @@ end;
 procedure TfpgWindowBase.AfterConstruction;
 begin
   inherited AfterConstruction;
-  { Here is a neater way by using RTTI to set default property values all
+  { There is a neater way by using RTTI to set default property values all
     automatically. No need to duplicate the efforts and manually set the
     property default values in the constructor. This code is now the same for
     each TfpgWindowBase descendant (which includes GUI widgets) }
@@ -1409,10 +1469,11 @@ begin
   FInterpolation := AValue;
 end;
 
-constructor TfpgCanvasBase.Create;
+constructor TfpgCanvasBase.Create(awin: TfpgWindowBase);
 begin
   FBufferedDraw := True;
   FFastDoubleBuffer := True;
+  FWindow := awin;
 end;
 
 destructor TfpgCanvasBase.Destroy;
@@ -1671,15 +1732,15 @@ end;
 procedure TfpgCanvasBase.GradientFill(ARect: TfpgRect; AStart, AStop: TfpgColor;
   ADirection: TGradientDirection);
 var
-  RGBStart: TFPColor;
-  RGBStop: TFPColor;
+  RGBStart: TRGBTriple;
+  RGBStop: TRGBTriple;
   RDiff, GDiff, BDiff: Integer;
   count: Integer;
   i: Integer;
-  newcolor: TFPColor;
+  newcolor: TRGBTriple;
 begin
-  RGBStart := fpgColorToFPColor(fpgColorToRGB(AStart));
-  RGBStop  := fpgColorToFPColor(fpgColorToRGB(AStop));
+  RGBStart := fpgColorToRGBTriple(AStart);
+  RGBStop  := fpgColorToRGBTriple(AStop);
 
   if ADirection = gdVertical then
     count := ARect.Bottom - ARect.Top
@@ -1696,7 +1757,7 @@ begin
     newcolor.Red    := RGBStart.Red + (i * RDiff) div count;
     newcolor.Green  := RGBStart.Green + (i * GDiff) div count;
     newcolor.Blue   := RGBStart.Blue + (i * BDiff) div count;
-    SetColor(FPColorTofpgColor(newcolor));
+    SetColor(RGBTripleTofpgColor(newcolor));
 
     // We have to overshoot by 1 pixel as DrawLine paints 1 pixel short (by design)
     if ADirection = gdHorizontal then
@@ -1725,6 +1786,11 @@ end;
 function TfpgCanvasBase.GetClipRect: TfpgRect;
 begin
   Result := DoGetClipRect;
+end;
+
+function TfpgCanvasBase.GetLineWidth: integer;
+begin
+  Result := FLineWidth;
 end;
 
 procedure TfpgCanvasBase.AddClipRect(const ARect: TfpgRect);
@@ -1905,7 +1971,7 @@ var
   contributions: array[0..10] of TfpgInterpolationContribution;
   dif, w, gamma, a: double;
   c: TfpgColor;
-  rgb: TFPColor;
+  rgb: TRGBTriple;
 begin
   for x := 0 to Width - 1 do
   begin
@@ -1949,7 +2015,7 @@ begin
         with contributions[r] do
         begin
           c   := image.colors[place, y];
-          rgb := fpgColorToFPColor(c);
+          rgb := fpgColorToRGBTriple(c);
           a     := weight; // * rgb.Alpha / $FFFF;
           re    := re + a * rgb.Red;
           gr    := gr + a * rgb.Green;
@@ -1963,7 +2029,7 @@ begin
         blue  := ColorRound(bl);
 //        alpha := ColorRound(gamma * $FFFF);
       end;
-      tempimage.colors[x, y] := FPColorTofpgColor(rgb);
+      tempimage.colors[x, y] := RGBTripleTofpgColor(rgb);
     end;
   end;
 end;
@@ -1976,7 +2042,7 @@ var
   contributions: array[0..10] of TfpgInterpolationContribution;
   dif, w, gamma, a: double;
   c: TfpgColor;
-  rgb: TFPColor;
+  rgb: TRGBTriple;
 begin
   for y := 0 to Height - 1 do
   begin
@@ -2020,7 +2086,7 @@ begin
         with contributions[r] do
         begin
           c := tempimage.colors[x, place];
-          rgb := fpgColorToFPColor(c);
+          rgb := fpgColorToRGBTriple(c);
           a     := weight;// * rgb.alpha / $FFFF;
           re    := re + a * rgb.red;
           gr    := gr + a * rgb.green;
@@ -2034,7 +2100,7 @@ begin
         blue  := ColorRound(bl);
 //        alpha := ColorRound(gamma * $FFFF);
       end;
-      Canvas.Pixels[x + dx, y + dy] := FPColorTofpgColor(rgb);
+      Canvas.Pixels[x + dx, y + dy] := RGBTripleTofpgColor(rgb);
     end;
   end;
 end;
@@ -2172,17 +2238,23 @@ end;
 procedure TfpgImageBase.FreeImage;
 begin
   if FImageData <> nil then
-    FreeMem(FImageData);
+    FreeMem(FImageData, FImageDataSize);
   FImageData     := nil;
   FImageDataSize := 0;
+  FWidth        := 0;
+  FHeight       := 0;
+  FreeMask;
+//  DoFreeImage;
+end;
+
+procedure TfpgImageBase.FreeMask;
+begin
   if FMaskData <> nil then
-    FreeMem(FMaskData);
+    FreeMem(FMaskData, FMaskDataSize);
   FMaskData     := nil;
   FMaskDataSize := 0;
   FMasked       := False;
-  FWidth        := 0;
-  FHeight       := 0;
-//  DoFreeImage;
+  FMaskWidth    := 0;
 end;
 
 procedure TfpgImageBase.AllocateImage(acolordepth, awidth, aheight: integer);
@@ -2208,8 +2280,6 @@ begin
 end;
 
 procedure TfpgImageBase.AllocateMask;
-var
-  dww: integer;
 begin
   if (FWidth < 1) or (FHeight < 1) then
     Exit; //==>
@@ -2218,8 +2288,8 @@ begin
   if FMaskData <> nil then
     FreeMem(FMaskData);
 
-  dww           := (FWidth + 31) div 32;
-  FMaskDataSize := dww * FHeight * 4;
+  FMaskWidth    := ((FWidth + 31) div 32) * 4;
+  FMaskDataSize := FMaskWidth * FHeight;
   GetMem(FMaskData, FMaskDataSize);
 end;
 
@@ -2227,17 +2297,44 @@ procedure TfpgImageBase.CreateMaskFromSample(x, y: TfpgCoord);
 var
   p: ^longword;
   pmsk: ^byte;
-  c: longword;
+  c, n: longword;
   linecnt: integer;
   pixelcnt: integer;
   bit: byte;
   msklinelen: integer;
+  row, col: integer;
 begin
   if FColorDepth = 1 then
     Exit; //==>
 
   if (FImageData = nil) then
     Exit; //==>
+
+{$ifdef AGGCanvas}
+  p := FImageData;
+  if x < 0 then
+    Inc(p, FWidth - 1)
+  else
+    Inc(p, x);
+  if y < 0 then
+    Inc(p, FWidth * (FHeight - 1))
+  else
+    Inc(p, FWidth * y);
+
+  c := p^;  // the sample
+
+  for row := 0 to FHeight-1 do
+  begin
+    for col := 0 to FWidth-1 do
+    begin
+      n := PLongWord(FImageData)[row * FWidth + col];
+      if n = c then
+        { set Alpha value 100% transparent }
+        PLongWord(FImageData)[row * FWidth + col] := n and $00FFFFFF;
+    end;
+  end;
+
+{$else}
 
   AllocateMask;
   FMaskPoint := Point(x, y);
@@ -2290,6 +2387,7 @@ begin
 
     Inc(linecnt);
   until linecnt >= FHeight;
+{$endif}
 end;
 
 procedure TfpgImageBase.UpdateImage;
@@ -2298,7 +2396,7 @@ begin
     DoInitImage(FColorDepth, FWidth, FHeight, FImageData);
 
   if FMaskData <> nil then
-    DoInitImageMask(FWidth, FHeight, FMaskData);
+    DoInitImageMask(FWidth, FHeight, FMaskWidth, FMaskData);
 end;
 
 { TfpgApplicationBase }
@@ -2461,6 +2559,8 @@ var
   p: TProcess;
 begin
   Result := False;
+  if not fpgFileExists(GetHelpViewer) then
+    raise EfpGUIUserFeedbackException.Create(rsfailedtofindhelpviewer);
   p := TProcess.Create(nil);
   try
     if fpgFileExists(HelpFile) then
@@ -2469,7 +2569,9 @@ begin
         p.CommandLine := GetHelpViewer + ' ' + HelpFile
       else
         p.CommandLine := GetHelpViewer + ' ' + HelpFile + ' -n ' + IntToStr(AHelpContext);
-//writeln('DEBUG:  TfpgApplicationBase.ContextHelp > ', p.CommandLine);
+        {$ifdef GDEBUG}
+        senddebug(p.CommandLine);
+        {$endif}
     end
     else
       p.CommandLine := GetHelpViewer;
@@ -2485,12 +2587,16 @@ var
   p: TProcess;
 begin
   Result := False;
+  if not fpgFileExists(GetHelpViewer) then
+    raise EfpGUIUserFeedbackException.Create(rsfailedtofindhelpviewer);
   p := TProcess.Create(nil);
   try
     if fpgFileExists(HelpFile) then
     begin
       p.CommandLine := GetHelpViewer + ' ' + HelpFile + ' -s ' + AHelpKeyword;
-//writeln('DEBUG:  TfpgApplicationBase.ContextHelp > ', p.CommandLine);
+      {$ifdef GDEBUG}
+      senddebug(p.CommandLine);
+      {$endif}
     end
     else
       p.CommandLine := GetHelpViewer;
@@ -2624,7 +2730,7 @@ var
   e: TFileEntry;
 begin
   e := TFileEntry.Create;
-  e.Name        := sr.Name;
+  e.Name        := fpgFromOSEncoding(sr.Name);
   e.Extension   := fpgExtractFileExt(e.Name);
   e.Size        := sr.Size;
   // e.Attributes  := sr.Attr; // this is incorrect and needs to improve!

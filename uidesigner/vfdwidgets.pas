@@ -66,6 +66,7 @@ uses
   fpg_editbtn,
   fpg_ColorWheel,
   fpg_splitter,
+  fpg_hyperlink,
   vfdpropeditgrid,
   vfdmain;
 
@@ -316,6 +317,11 @@ begin
     'vfd.splitter', @stdimg_vfd_splitter,
     sizeof(stdimg_vfd_splitter),
     0, 0);
+
+  fpgImages.AddMaskedBMP(
+    'vfd.hyperlink', @stdimg_vfd_hyperlink,
+    sizeof(stdimg_vfd_hyperlink),
+    0, 0);
 end;
 
 procedure AddWidgetPosProps(wgc: TVFDWidgetClass);
@@ -380,6 +386,7 @@ begin
   wc.AddProperty('Hint', TPropertyString, 'Tooltip hint');
   wc.AddProperty('IgnoreMouseCursor', TPropertyBoolean, 'If True, then mouse pointer doesn''t change');
   wc.AddProperty('ParentShowHint', TPropertyBoolean, '');
+  wc.AddProperty('PasswordMode', TPropertyBoolean, 'When enabled, it masks the text input');
   wc.AddProperty('ShowHint', TPropertyBoolean, '');
   wc.AddProperty('TabOrder', TPropertyInteger, 'The tab order');
   wc.AddProperty('Text', TPropertyString, 'Initial text');
@@ -392,6 +399,7 @@ begin
   wc.NameBase := 'Memo';
   wc.AddProperty('Align', TPropertyEnum, 'Component alignment');
   wc.AddProperty('BackgroundColor', TPropertyColor, '');
+  wc.AddProperty('BorderStyle', TPropertyEnum, '');
   wc.AddProperty('Enabled', TPropertyBoolean, '');
   wc.AddProperty('FontDesc', TPropertyFontDesc, 'The font used for displaying the text');
   wc.AddProperty('Hint', TPropertyString, 'Tooltip hint');
@@ -574,6 +582,7 @@ begin
   wc.AddProperty('Align', TPropertyEnum, 'Component alignment');
   wc.AddProperty('AlternateBGColor', TPropertyColor, 'The color of every alternative row. Dependent on grid Options property.');
   wc.AddProperty('BackgroundColor', TPropertyColor, '');
+  wc.AddProperty('BorderStyle', TPropertyEnum, '');
   wc.AddProperty('Columns', TPropertyDBColumns, 'Defines the various columns for a grid. At least one column must exist.');
   wc.AddProperty('Enabled', TPropertyBoolean, '');
   wc.AddProperty('FontDesc', TPropertyFontDesc, 'The font used for displaying the text');
@@ -582,6 +591,7 @@ begin
   wc.AddProperty('ParentShowHint', TPropertyBoolean, '');
   wc.AddProperty('RowCount', TPropertyInteger, 'Default number of rows in the grid');
   wc.AddProperty('RowSelect', TPropertyBoolean, 'If enabled, a whole row is selected, not just a cell');
+  wc.AddProperty('ScrollbarStyle', TPropertyEnum, '');
   wc.AddProperty('ShowGrid', TPropertyBoolean, 'Must the grid lines be shown');
   wc.AddProperty('ShowHeader', TPropertyBoolean, 'Must the grid header be visible');
   wc.AddProperty('ShowHint', TPropertyBoolean, '');
@@ -948,6 +958,27 @@ begin
   wc.AddProperty('ColorGrabBar', TPropertyColor, '');
   wc.AddProperty('AutoSnap', TPropertyBoolean, '');
   wc.WidgetIconName := 'vfd.splitter';
+  RegisterVFDWidget(wc);
+
+  // Hyperlink
+  wc          := TVFDWidgetClass.Create(TfpgHyperlink);
+  wc.NameBase := 'Hyperlink';
+  wc.AddProperty('Align', TPropertyEnum, 'Component alignment');
+  wc.AddProperty('Alignment', TPropertyEnum, 'Horizontal text alignment');
+  wc.AddProperty('BackgroundColor', TPropertyColor, '');
+  wc.AddProperty('Enabled', TPropertyBoolean, '');
+  wc.AddProperty('FontDesc', TPropertyFontDesc, 'The font used for displaying the label text');
+  wc.AddProperty('Hint', TPropertyString, 'Tooltip hint');
+  wc.AddProperty('HotTrackColor', TPropertyColor, 'The color that the text must appear in when the mouse is over the widget.');
+  wc.AddProperty('HotTrackFont', TPropertyFontDesc, 'The font that the text must use, when the mouse is over the widget.');
+  wc.AddProperty('Layout', TPropertyEnum, 'Vertical text layout');
+  wc.AddProperty('ParentShowHint', TPropertyBoolean, '');
+  wc.AddProperty('ShowHint', TPropertyBoolean, '');
+  wc.AddProperty('Text', TPropertyString, 'Label text');
+  wc.AddProperty('TextColor', TPropertyColor, '');
+  wc.AddProperty('URL', TPropertyString, 'The URL that must be opened in the default web browser. If OnClick is specified, then the URL has no affect.');
+  wc.AddProperty('WrapText', TPropertyBoolean, 'If True text will wrap when it doesn''t fit the width');
+  wc.WidgetIconName := 'vfd.hyperlink';
   RegisterVFDWidget(wc);
 
   // Other - do not delete!!! this should be the last...

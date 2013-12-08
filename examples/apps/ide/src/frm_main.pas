@@ -1,3 +1,21 @@
+{
+    fpGUI IDE - Maximus
+
+    Copyright (C) 2012 - 2013 Graeme Geldenhuys
+
+    See the file COPYING.modifiedLGPL, included in this distribution,
+    for details about redistributing fpGUI.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Description:
+      Maximus IDE is an example application, to showcase a bit more of
+      what fpGUI can do in a larger project. It also ties in a lot of
+      various fpGUI widgets and framework functionality.
+}
+
 unit frm_main;
 
 {$mode objfpc}{$H+}
@@ -22,7 +40,6 @@ type
     btnOpen: TfpgButton;
     btnSave: TfpgButton;
     btnSaveAll: TfpgButton;
-    btnTest: TfpgButton;
     pnlStatusBar: TfpgBevel;
     lblStatus: TfpgLabel;
     pnlClientArea: TfpgBevel;
@@ -39,8 +56,6 @@ type
     tsFiles: TfpgTabSheet;
     grdFiles: TfpgFileGrid;
     Splitter2: TfpgSplitter;
-    grdOpenFiles: TfpgStringGrid;
-    Splitter3: TfpgSplitter;
     pcEditor: TfpgPageControl;
     tseditor: TfpgTabSheet;
     TextEditor: TfpgTextEdit;
@@ -54,20 +69,34 @@ type
     mnuSettings: TfpgPopupMenu;
     mnuHelp: TfpgPopupMenu;
     {@VFD_HEAD_END: MainForm}
+    {$ifdef DEBUGSVR}
+    btnTest: TfpgButton;
+    {$endif}
     pmOpenRecentMenu: TfpgPopupMenu;
+    miFile: TfpgMenuItem;
     miRecentProjects: TfpgMenuItem;
     FRecentFiles: TfpgMRU;
     FRegex: TRegExpr;
     FKeywordFont: TfpgFont;
     FFileMonitor: TFileMonitor;
+    FLastSearchText: TfpgString;
+    FLastFindOptions: TfpgFindOptions;
+    FLastFindBackward: Boolean;
     procedure   MonitoredFileChanged(Sender: TObject; AData: TFileMonitorEventData);
     procedure   FormShow(Sender: TObject);
     procedure   FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure   btnQuitClicked(Sender: TObject);
     procedure   btnOpenFileClicked(Sender: TObject);
+    procedure   miFileNewUnit(Sender: TObject);
     procedure   miFileSave(Sender: TObject);
     procedure   miFileSaveAs(Sender: TObject);
+    procedure   miEditCutClicked(Sender: TObject);
+    procedure   miEditCopyClicked(Sender: TObject);
+    procedure   miEditPasteClicked(Sender: TObject);
     procedure   miFindClicked(Sender: TObject);
+    procedure   miFindNextClicked(Sender: TObject);
+    procedure   miFindPrevClicked(Sender: TObject);
+    procedure   miGoToLineClick(Sender: TObject);
     procedure   miSearchProcedureList(Sender: TObject);
     procedure   miAboutFPGuiClicked(Sender: TObject);
     procedure   miAboutIDE(Sender: TObject);
@@ -86,8 +115,10 @@ type
     procedure   miRecentProjectsClick(Sender: TObject; const FileName: String);
     procedure   miProjectSave(Sender: TObject);
     procedure   miProjectSaveAs(Sender: TObject);
+    procedure   AddUnitToProject(const AUnitName: TfpgString);
     procedure   miProjectAddUnitToProject(Sender: TObject);
     procedure   tvProjectDoubleClick(Sender: TObject; AButton: TMouseButton; AShift: TShiftState; const AMousePos: TPoint);
+    procedure   grdMessageKeyPressed(Sender: TObject; var KeyCode: Word; var ShiftState: TShiftState; var Consumed: Boolean);
     procedure   TabSheetClosing(Sender: TObject; ATabSheet: TfpgTabSheet);
     procedure   BuildTerminated(Sender: TObject);
     procedure   BuildOutput(Sender: TObject; const ALine: string);
@@ -99,11 +130,14 @@ type
     procedure   ClearMessagesWindow;
     procedure   CloseAllTabs;
     procedure   LoadProject(const AFilename: TfpgString);
+    function    CreateNewEditorTab(const ATitle: TfpgString): TfpgTabSheet;
     function    OpenEditorPage(const AFilename: TfpgString): TfpgTabSheet;
     procedure   miTest(Sender: TObject);
     function    GetUnitsNode: TfpgTreeNode;
     procedure   UpdateWindowTitle;
-    procedure   TextEditDrawLine(Sender: TObject; ALineText: TfpgString; ALineIndex: Integer; ACanvas: TfpgCanvas; ATextRect: TfpgRect; var AllowSelfDraw: Boolean);
+    procedure   HighlightObjectPascal(Sender: TObject; ALineText: TfpgString; ALineIndex: Integer; ACanvas: TfpgCanvas; ATextRect: TfpgRect; var AllowSelfDraw: Boolean);
+    procedure   HighlightPatch(Sender: TObject; ALineText: TfpgString; ALineIndex: Integer; ACanvas: TfpgCanvas; ATextRect: TfpgRect; var AllowSelfDraw: Boolean);
+    procedure   SetupEditorPreference;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -146,24 +180,6 @@ const
   cSourceFiles = '*.pas;*.pp;*.lpr;*.dpr;*.inc';
   cProjectFiles = '*.project';
 
-  { nicely working so far }
-  cKeywords1 = '\b(begin|end|read|write|with|try|finally|except|uses|interface'
-    + '|implementation|procedure|function|constructor|destructor|property|operator'
-    + '|private|protected|public|published|type|virtual|abstract|overload'
-    + '|override|class|unit|program|library|set|of|if|then|for|downto|to|as|div|mod|shr|shl'
-    + '|do|else|while|and|inherited|const|var|initialization|finalization'
-    + '|on|or|in|raise|not|case|record|array|out|resourcestring|default'
-    + '|xor|repeat|until|constref|stdcall|cdecl|external|generic|specialize)\b';
-
-  cComments1 = '(\s*\/\/.*$)|(\{[^\{]*\})';
-  cComments2 = '\{[^\{]*\}';
-
-  cDefines1 = '\{\$[^\{]*\}';
-
-  cString1 = '''.*''';
-
-  cDecimal = '\b(([0-9]+)|([0-9]+\.[0-9]+([Ee][-]?[0-9]+)?))\b';
-  cHexidecimal = '\b\$[0-9a-fA-F]*\b';
 
 {@VFD_NEWFORM_IMPL}
 
@@ -180,6 +196,34 @@ begin
   if s <> '' then
   begin
     OpenEditorPage(s);
+  end;
+end;
+
+procedure TMainForm.miFileNewUnit(Sender: TObject);
+var
+  newunit: TfpgString;
+  sl: TStringList;
+  FInternalMacroList: TIDEMacroList;
+  i: integer;
+begin
+  if fpgInputQuery('New Unit', 'Please give the new unit a file name', newunit) then
+  begin
+    if GProject.UnitList.FileExists(newunit) then
+    begin
+      ShowMessage(Format('The unit <%s> already exists in the project', [newunit]));
+      Exit;
+    end;
+    sl := TStringList.Create;
+    try
+      sl.LoadFromFile(GMacroList.ExpandMacro('${TEMPLATEDIR}default/unit.pas'));
+      sl.Text := StringReplace(sl.Text, '${UNITNAME}', fpgChangeFileExt(fpgExtractFileName(newunit), ''), [rfReplaceAll, rfIgnoreCase]);
+      sl.SaveToFile(GProject.ProjectDir + newunit);
+    finally
+      sl.Free;
+    end;
+//    AddUnitToProject(newunit);
+
+    OpenEditorPage(newunit);
   end;
 end;
 
@@ -202,21 +246,93 @@ begin
     TfpgTextEdit(pcEditor.ActivePage.Components[0]).SaveToFile(s);
 end;
 
+procedure TMainForm.miEditCutClicked(Sender: TObject);
+var
+  edt: TfpgTextEdit;
+begin
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  edt.CutToClipboard;
+end;
+
+procedure TMainForm.miEditCopyClicked(Sender: TObject);
+var
+  edt: TfpgTextEdit;
+begin
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  edt.CopyToClipboard;
+end;
+
+procedure TMainForm.miEditPasteClicked(Sender: TObject);
+var
+  edt: TfpgTextEdit;
+begin
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  edt.PasteFromClipboard;
+end;
+
 procedure TMainForm.miFindClicked(Sender: TObject);
 var
   s: TfpgString;
   edt: TfpgTextEdit;
-  lFindOptions: TfpgFindOptions;
-  lBackward: Boolean;
 begin
-  lBackward := False;
-  lFindOptions := [];
-  DisplayFindForm(s, lFindOptions, lBackward);
+  FLastFindBackward := False;
+  FLastFindOptions := [];
+  DisplayFindForm(s, FLastFindOptions, FLastFindBackward);
   if s = '' then
     exit;
+  FLastSearchText := s;
   edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
-  edt.FindText(s, lFindOptions, lBackward);
+  edt.FindText(s, FLastFindOptions, FLastFindBackward);
   edt.SetFocus;
+end;
+
+procedure TMainForm.miFindNextClicked(Sender: TObject);
+var
+  edt: TfpgTextEdit;
+begin
+  if FLastSearchText = '' then
+    Exit;
+  FLastFindBackward := False;
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  if not Assigned(edt) then
+    Exit;
+  edt.FindText(FLastSearchText, FLastFindOptions, FLastFindBackward);
+  edt.SetFocus;
+end;
+
+procedure TMainForm.miFindPrevClicked(Sender: TObject);
+var
+  edt: TfpgTextEdit;
+begin
+  if FLastSearchText = '' then
+    Exit;
+  FLastFindBackward := True;
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  if not Assigned(edt) then
+    Exit;
+  edt.FindText(FLastSearchText, FLastFindOptions, FLastFindBackward);
+  edt.SetFocus;
+end;
+
+procedure TMainForm.miGoToLineClick(Sender: TObject);
+var
+  sValue: string;
+  i: integer;
+  edt: TfpgTextEdit;
+begin
+  edt := TfpgTextEdit(pcEditor.ActivePage.Components[0]);
+  if not Assigned(edt) then
+    Exit;
+  if fpgInputQuery('Go to line', 'Go to line number?', sValue) then
+  begin
+    try
+      i := StrToInt(sValue);
+      edt.GotoLine(i);
+    except
+      on E: Exception do
+         ShowMessage('Invalid line number.' + LineEnding + E.Message);
+    end;
+  end;
 end;
 
 procedure TMainForm.miSearchProcedureList(Sender: TObject);
@@ -317,15 +433,9 @@ begin
 end;
 
 procedure TMainForm.miConfigureIDE(Sender: TObject);
-var
-  i: integer;
 begin
   DisplayConfigureIDE;
-  pcEditor.TabPosition := TfpgTabPosition(gINI.ReadInteger(cEditor, 'TabPosition', 0));
-  FKeywordFont.Free;
-  FKeywordFont := nil;
-  for i := 0 to pcEditor.PageCount-1 do
-    TfpgTextEdit(pcEditor.Pages[i].Components[0]).FontDesc := gINI.ReadString(cEditor, 'Font', '#Edit2');
+  SetupEditorPreference;
 end;
 
 procedure TMainForm.miViewDebug(Sender: TObject);
@@ -412,6 +522,7 @@ begin
       s := s + cProjectExt;
     try
       GProject.Save(s);
+      FRecentFiles.AddItem(s);
     except
       on E: Exception do
       begin
@@ -423,12 +534,30 @@ begin
   end;
 end;
 
-procedure TMainForm.miProjectAddUnitToProject(Sender: TObject);
+procedure TMainForm.AddUnitToProject(const AUnitName: TfpgString);
 var
   u: TUnit;
   s: TfpgString;
   r: TfpgTreeNode;
   n: TfpgTreeNode;
+begin
+  u := TUnit.Create;
+  u.FileName := AUnitName;
+  u.Opened := True;
+  GProject.UnitList.Add(u);
+  // add reference to tabsheet
+  pcEditor.ActivePage.TagPointer := u;
+  s := fpgExtractRelativepath(GProject.ProjectDir, u.FileName);
+  r := GetUnitsNode;
+  n := r.AppendText(s);
+  // add reference to treenode
+  n.Data := u;
+  tvProject.Invalidate;
+end;
+
+procedure TMainForm.miProjectAddUnitToProject(Sender: TObject);
+var
+  s: TfpgString;
 begin
   s := pcEditor.ActivePage.Hint;
 //  writeln('adding unit: ', s);
@@ -436,18 +565,7 @@ begin
     Exit;
   if GProject.UnitList.FileExists(s) then
     Exit;
-  u := TUnit.Create;
-  u.FileName := s;
-  u.Opened := True;
-  GProject.UnitList.Add(u);
-  // add reference to tabsheet
-  pcEditor.ActivePage.TagPointer := u;
-  s := ExtractRelativepath(GProject.ProjectDir, u.FileName);
-  r := GetUnitsNode;
-  n := r.AppendText(s);
-  // add reference to treenode
-  n.Data := u;
-  tvProject.Invalidate;
+  AddUnitToProject(s);
 end;
 
 procedure TMainForm.tvProjectDoubleClick(Sender: TObject; AButton: TMouseButton; AShift: TShiftState; const AMousePos: TPoint);
@@ -466,6 +584,22 @@ begin
     ts := OpenEditorPage(u.FileName);
     u.Opened := True;
     ts.TagPointer := u; // add reference to tabsheet
+  end;
+end;
+
+procedure TMainForm.grdMessageKeyPressed(Sender: TObject; var KeyCode: Word; var ShiftState: TShiftState; var Consumed: Boolean);
+var
+  cr: TClipboardKeyType;
+  i: integer;
+  s: TfpgString;
+begin
+  cr := CheckClipboardKey(KeyCode, ShiftState);
+  if cr = ckCopy then
+  begin
+    s := '';
+    for i := 0 to grdMessages.RowCount-1 do
+      s := s + grdMessages.Cells[0, i] + LineEnding;
+    fpgClipboard.Text := s;
   end;
 end;
 
@@ -519,8 +653,7 @@ begin
   begin
     for i := 0 to GProject.UnitList.Count-1 do
     begin
-      {$Note ExtractRelativePath still needs a fpGUI wrapper }
-      s := ExtractRelativepath(GProject.ProjectDir, GProject.UnitList[i].FileName);
+      s := fpgExtractRelativepath(GProject.ProjectDir, GProject.UnitList[i].FileName);
       n := r.AppendText(s);
       n.Data := GProject.UnitList[i];
     end;
@@ -558,11 +691,16 @@ var
   ts: TfpgTabSheet;
   i: integer;
 begin
-  for i := 0 to pcEditor.PageCount-1 do
-  begin
-    ts := pcEditor.Pages[0];
-    pcEditor.RemoveTabSheet(ts);
-    ts.Free;
+  pcEditor.BeginUpdate;
+  try
+    for i := 0 to pcEditor.PageCount-1 do
+    begin
+      ts := pcEditor.Pages[0];
+      pcEditor.RemoveTabSheet(ts);
+      ts.Free;
+    end;
+  finally
+    pcEditor.EndUpdate;
   end;
 end;
 
@@ -591,6 +729,20 @@ begin
   AddMessage('Project loaded');
 end;
 
+function TMainForm.CreateNewEditorTab(const ATitle: TfpgString): TfpgTabSheet;
+var
+  m: TfpgTextEdit;
+begin
+  Result := pcEditor.AppendTabSheet(ATitle);
+  m := TfpgTextEdit.Create(Result);
+  m.SetPosition(1, 1, 200, 20);
+  m.Align := alClient;
+  m.FontDesc := gINI.ReadString(cEditor, 'Font', '#Edit2');
+  m.GutterVisible := True;
+  m.GutterShowLineNumbers := True;
+  m.RightEdge := True;
+end;
+
 function TMainForm.OpenEditorPage(const AFilename: TfpgString): TfpgTabSheet;
 var
   s: TfpgString;
@@ -598,8 +750,12 @@ var
   i: integer;
   found: Boolean;
   ts: TfpgTabSheet;
-  m: TfpgTextEdit;
   ext: TfpgString;
+  pos_h: integer;
+  pos_v: integer;
+  cur_pos_h: integer;
+  cur_pos_v: integer;
+  editor: TfpgTextEdit;
 begin
   s := AFilename;
   f := fpgExtractFileName(s);
@@ -614,9 +770,19 @@ begin
   if found then
   begin
     // reuse existing tab
-    TfpgTextEdit(pcEditor.Pages[i].Components[0]).Lines.BeginUpdate;
-    TfpgTextEdit(pcEditor.Pages[i].Components[0]).LoadFromFile(s);
-    TfpgTextEdit(pcEditor.Pages[i].Components[0]).Lines.EndUpdate;
+    editor := TfpgTextEdit(pcEditor.Pages[i].Components[0]);
+    pos_h := editor.ScrollPos_H;
+    pos_v := editor.ScrollPos_V;
+    cur_pos_h := editor.CaretPos_H;
+    cur_pos_v := editor.CaretPos_V;
+    editor.Lines.BeginUpdate;
+    editor.LoadFromFile(s);
+    editor.ScrollPos_H := pos_h;
+    editor.ScrollPos_V := pos_v;
+    editor.CaretPos_H := cur_pos_h;
+    editor.CaretPos_V := cur_pos_v;
+    editor.UpdateScrollBars;
+    editor.Lines.EndUpdate;
     pcEditor.ActivePageIndex := i;
     ts := pcEditor.ActivePage;
     AddMessage('File reloaded: ' + s);
@@ -624,23 +790,23 @@ begin
   else
   begin
     // we need a new tabsheet
-    ts := pcEditor.AppendTabSheet(f);
-    m := TfpgTextEdit.Create(ts);
-    m.SetPosition(1, 1, 200, 20);
-    m.Align := alClient;
-    m.FontDesc := gINI.ReadString(cEditor, 'Font', '#Edit2');
-    m.GutterVisible := True;
-    m.GutterShowLineNumbers := True;
-    m.RightEdge := True;
-    TfpgTextEdit(ts.Components[0]).Lines.BeginUpdate;
-    TfpgTextEdit(ts.Components[0]).Lines.LoadFromFile(s);
-    TfpgTextEdit(ts.Components[0]).Lines.EndUpdate;
+    ts := CreateNewEditorTab(f);
+    editor := ts.Components[0] as TfpgTextEdit;
+    editor.Lines.BeginUpdate;
+    if fpgFileExists(s) then
+      editor.Lines.LoadFromFile(s);
+    editor.Lines.EndUpdate;
     if gINI.ReadBool(cEditor, 'SyntaxHighlighting', True) then
     begin
       ext := fpgExtractFileExt(AFilename);
-      if (ext = '.pas') or (ext = '.pp') or (ext = '.inc') or (ext = '.lpr')
-         or (ext = '.dpr') then
-        TfpgTextEdit(ts.Components[0]).OnDrawLine := @TextEditDrawLine;
+      if (ext = '.pas') or (ext = '.pp') or (ext = '.inc') or (ext = '.lpr') or (ext = '.dpr') then
+      begin
+        TfpgTextEdit(ts.Components[0]).OnDrawLine := @HighlightObjectPascal;
+      end
+      else if (ext = '.patch') or (ext = '.diff') then
+      begin
+        TfpgTextEdit(ts.Components[0]).OnDrawLine := @HighlightPatch;
+      end;
     end;
     ts.Realign;
     pcEditor.ActivePage := ts;
@@ -656,12 +822,14 @@ var
   s: TfpgString;
   r: TfpgString;
 begin
+  {$ifdef DEBUGSVR}
   TempHourGlassCursor(TfpgWidget(self));
   s := cMacro_Compiler + ' -FU' +cMacro_Target+' -Fu' + cMacro_FPGuiLibDir;
-//  writeln('source string = ', s);
+  SendDebug('source string = ' + s);
   r := GMacroList.ExpandMacro(s);
-//  writeln('expanded string = ', r);
+  SendDebug('expanded string = ' + r);
   sleep(5000);
+  {$endif}
 end;
 
 function TMainForm.GetUnitsNode: TfpgTreeNode;
@@ -674,9 +842,28 @@ begin
   WindowTitle := Format(cTitle, [GProject.ProjectName]);
 end;
 
-procedure TMainForm.TextEditDrawLine(Sender: TObject; ALineText: TfpgString;
+procedure TMainForm.HighlightObjectPascal(Sender: TObject; ALineText: TfpgString;
   ALineIndex: Integer; ACanvas: TfpgCanvas; ATextRect: TfpgRect;
   var AllowSelfDraw: Boolean);
+const
+  { nicely working so far }
+  cKeywords1 = '\b(begin|end|read|write|with|try|finally|except|uses|interface'
+    + '|implementation|procedure|function|constructor|destructor|property|operator'
+    + '|private|protected|public|published|type|virtual|abstract|overload'
+    + '|override|class|unit|program|library|set|of|if|then|for|downto|to|as|div|mod|shr|shl'
+    + '|do|else|while|and|inherited|const|var|initialization|finalization'
+    + '|on|or|in|raise|not|case|record|array|out|resourcestring|default'
+    + '|xor|repeat|until|constref|stdcall|cdecl|external|generic|specialize)\b';
+
+  cComments1 = '(\s*\/\/.*$)|(\{[^\{]*\})';
+  cComments2 = '\{[^\{]*\}';
+
+  cDefines1 = '\{\$[^\{]*\}';
+
+  cString1 = '''.*''';
+
+  cDecimal = '\b(([0-9]+)|([0-9]+\.[0-9]+([Ee][-]?[0-9]+)?))\b';
+  cHexadecimal = '\$[0-9a-fA-F]+';
 var
   oldfont: TfpgFont;
   s: TfpgString;  // copy of ALineText we work with
@@ -735,6 +922,23 @@ begin
       j := Length(s);
       r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
           (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cHexadecimal }
+  ACanvas.TextColor := clMagenta;
+  FRegex.Expression := cHexadecimal;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth *j), ATextRect.Height);
       ACanvas.FillRectangle(r);
       ACanvas.DrawText(r, s);
     until not FRegex.ExecNext;
@@ -810,6 +1014,158 @@ begin
 //  writeln('------');
 end;
 
+procedure TMainForm.HighlightPatch(Sender: TObject; ALineText: TfpgString;
+  ALineIndex: Integer; ACanvas: TfpgCanvas; ATextRect: TfpgRect;
+  var AllowSelfDraw: Boolean);
+const
+  cRemovedLines = '^(-[^-]|\<|!).*';        // starts with "-" or "<" or "!" symbols
+  cAddedLines = '^(\+[^\+]|\>).*';          // starts with "+" or ">" symbols
+  cLeftFile = '^--- .*';                    // starts with "--- " symbols
+  cRightFile = '^(\+\+\+|\*\*\*) .*';       // starts with "+++ " or "*** " symbols
+  cHunk = '^\@\@.*';                        // starts with "@@" symbols
+  cStartOfFile = '^(diff|index) .*';        // starts with "diff " or "index " symbols
+var
+  oldfont: TfpgFont;
+  s: TfpgString;  // copy of ALineText we work with
+  i, j, c: integer;  // i = position of reserved word; c = last character pos
+  iLength: integer; // length of reserved word
+  w: integer;     // reserved word loop variable
+  r: TfpgRect;    // string rectangle to draw in
+  edt: TfpgTextEdit;
+  lMatchPos, lOffset: integer; // user for regex
+begin
+  edt := TfpgTextEdit(Sender);
+  AllowSelfDraw := False;
+
+  oldfont := TfpgFont(ACanvas.Font);
+  ACanvas.Color := clWhite;
+
+  { draw the plain text first }
+  ACanvas.TextColor := clBlack;
+  ACanvas.DrawText(ATextRect, ALineText);
+
+  lMatchPos := 0;
+  lOffset := 0;
+
+  { syntax highlighting for: cRemovedLines }
+  ACanvas.TextColor := clRed;
+  FRegex.Expression := cRemovedLines;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cAddedLines }
+  ACanvas.TextColor := clGreen;
+  FRegex.Expression := cAddedLines;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cLeftFile }
+  ACanvas.TextColor := clMagenta;
+  FRegex.Expression := cLeftFile;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cRightFile }
+  ACanvas.TextColor := clMagenta;
+  FRegex.Expression := cRightFile;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cHunk }
+  ACanvas.TextColor := clBlue;
+  FRegex.Expression := cHunk;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+
+  { syntax highlighting for: cStartOfFile }
+  ACanvas.TextColor := clBlack;
+  ACanvas.Color := clSilver;
+  FRegex.Expression := cStartOfFile;
+  if FRegex.Exec(ALineText) then
+  begin
+    repeat
+      lMatchPos := FRegex.MatchPos[0];
+      lOffset := FRegex.MatchLen[0];
+      s := FRegex.Match[0];
+      j := Length(s);
+      r.SetRect(ATextRect.Left + (edt.FontWidth * (lMatchPos-1)), ATextRect.Top,
+          (edt.FontWidth * j), ATextRect.Height);
+      ACanvas.FillRectangle(r);
+      ACanvas.DrawText(r, s);
+    until not FRegex.ExecNext;
+  end;
+  ACanvas.Color := clWhite;
+
+  ACanvas.Font := oldfont;
+end;
+
+procedure TMainForm.SetupEditorPreference;
+var
+  i: integer;
+begin
+  pcEditor.TabPosition := TfpgTabPosition(gINI.ReadInteger(cEditor, 'TabPosition', 0));
+  pcEditor.ActiveTabColor := TfpgColor(gINI.ReadInteger(cEditor, 'ActiveTabColor', pcEditor.BackgroundColor));
+  FKeywordFont.Free;
+  FKeywordFont := nil;
+  for i := 0 to pcEditor.PageCount-1 do
+    TfpgTextEdit(pcEditor.Pages[i].Components[0]).FontDesc := gINI.ReadString(cEditor, 'Font', '#Edit2');
+end;
+
 procedure TMainForm.MonitoredFileChanged(Sender: TObject; AData: TFileMonitorEventData);
 begin
   OpenEditorPage(AData.FileName);
@@ -828,9 +1184,8 @@ begin
 
   SetupProjectTree;
   SetupFilesGrid;
+  SetupEditorPreference;
 
-  // apply editor settings
-  pcEditor.TabPosition := TfpgTabPosition(gINI.ReadInteger(cEditor, 'TabPosition', 0));
   FRegex := TRegExpr.Create;
 
   TextEditor.Clear;
@@ -882,6 +1237,8 @@ begin
   WindowTitle := 'fpGUI IDE - %s';
   Hint := '';
   WindowPosition := wpOneThirdDown;
+  MinWidth := 580;
+  MinHeight := 400;
 
   pnlMenu := TfpgBevel.Create(self);
   with pnlMenu do
@@ -977,20 +1334,6 @@ begin
     TabOrder := 6;
   end;
 
-  btnTest := TfpgButton.Create(Toolbar);
-  with btnTest do
-  begin
-    Name := 'btnTest';
-    SetPosition(168, 2, 80, 24);
-    Text := 'test';
-    Down := False;
-    FontDesc := '#Label1';
-    Hint := '';
-    ImageName := '';
-    TabOrder := 7;
-    OnClick := @miTest;
-  end;
-
   pnlStatusBar := TfpgBevel.Create(self);
   with pnlStatusBar do
   begin
@@ -1051,7 +1394,7 @@ begin
     SetPosition(0, 4, 558, 73);
     Anchors := [anLeft,anRight,anTop,anBottom];
     BackgroundColor := TfpgColor($80000002);
-    AddColumn('New', 800, taLeftJustify);
+    AddColumn('New', 2000, taLeftJustify);
     FontDesc := '#Grid';
     HeaderFontDesc := '#GridHeader';
     Hint := '';
@@ -1059,6 +1402,7 @@ begin
     RowSelect := True;
     ShowHeader := False;
     TabOrder := 13;
+    OnKeyPress := @grdMessageKeyPressed;
   end;
 
   tsScribble := TfpgTabSheet.Create(pnlWindow);
@@ -1154,31 +1498,6 @@ begin
     Align := alLeft;
   end;
 
-  grdOpenFiles := TfpgStringGrid.Create(pnlClientArea);
-  with grdOpenFiles do
-  begin
-    Name := 'grdOpenFiles';
-    SetPosition(516, 2, 120, 279);
-    Align := alRight;
-    BackgroundColor := TfpgColor($80000002);
-    AddColumn('File', 100, taLeftJustify);
-    FontDesc := '#Grid';
-    HeaderFontDesc := '#GridHeader';
-    Hint := '';
-    RowCount := 0;
-    RowSelect := True;
-    ShowHeader := False;
-    TabOrder := 24;
-  end;
-
-  Splitter3 := TfpgSplitter.Create(pnlClientArea);
-  with Splitter3 do
-  begin
-    Name := 'Splitter3';
-    SetPosition(508, 2, 8, 279);
-    Align := alRight;
-  end;
-
   pcEditor := TfpgPageControl.Create(pnlClientArea);
   with pcEditor do
   begin
@@ -1217,7 +1536,7 @@ begin
   begin
     Name := 'mnuFile';
     SetPosition(476, 61, 172, 20);
-    AddMenuItem('New...', rsKeyCtrl+'N', nil).Enabled := False;
+    miFile := AddMenuItem('New...', rsKeyCtrl+'N', @miFileNewUnit);
     AddMenuItem('-', '', nil);
     AddMenuItem('Open...', rsKeyCtrl+'O', @btnOpenFileClicked);
     AddMenuItem('Open Recent', '', nil).Enabled := False;
@@ -1233,9 +1552,9 @@ begin
   begin
     Name := 'mnuEdit';
     SetPosition(476, 80, 172, 20);
-    AddMenuItem('Cut', '', nil).Enabled := False;
-    AddMenuItem('Copy', '', nil).Enabled := False;
-    AddMenuItem('Paste', '', nil).Enabled := False;
+    AddMenuItem('Cut', rsKeyCtrl+'X', @miEditCutClicked);
+    AddMenuItem('Copy', rsKeyCtrl+'C', @miEditCopyClicked);
+    AddMenuItem('Paste', rsKeyCtrl+'V', @miEditPasteClicked);
     AddMenuItem('-', '', nil);
     AddMenuItem('Indent selection', rsKeyCtrl+'I', nil).Enabled := False;
     AddMenuItem('Unindent selection', rsKeyCtrl+'U', nil).Enabled := False;
@@ -1248,12 +1567,13 @@ begin
     Name := 'mnuSearch';
     SetPosition(476, 98, 172, 20);
     AddMenuItem('Find...', rsKeyCtrl+'F', @miFindClicked);
-    AddMenuItem('Find Next', 'F3', nil).Enabled := False;
-    AddMenuItem('Find Previous', rsKeyShift+'F3', nil).Enabled := False;
+    AddMenuItem('Find Next', 'F3', @miFindNextClicked);
+    AddMenuItem('Find Previous', rsKeyShift+'F3', @miFindPrevClicked);
     AddMenuItem('Find in Files...', rsKeyCtrl+rsKeyShift+'F', nil).Enabled := False;
     AddMenuItem('Replace...', rsKeyCtrl+'R', nil).Enabled := False;
     AddMenuItem('-', '', nil);
     AddMenuItem('Procedure List...', rsKeyCtrl+'G', @miSearchProcedureList);
+    AddMenuItem('Go to line...', rsKeyAlt+'G', @miGoToLineClick);
   end;
 
   mnuView := TfpgPopupMenu.Create(self);
@@ -1370,12 +1690,26 @@ begin
 
   FRecentFiles := TfpgMRU.Create(self);
   FRecentFiles.ParentMenuItem := pmOpenRecentMenu;
-  FRecentFiles.OnClick         :=@miRecentProjectsClick;
-  FRecentFiles.MaxItems        := gINI.ReadInteger('Options', 'MRUProjectCount', 10);
-  FRecentFiles.ShowFullPath    := gINI.ReadBool('Options', 'ShowFullPath', True);
+  FRecentFiles.OnClick        := @miRecentProjectsClick;
+  FRecentFiles.MaxItems       := gINI.ReadInteger('Options', 'MRUProjectCount', 10);
+  FRecentFiles.ShowFullPath   := gINI.ReadBool('Options', 'ShowFullPath', True);
   FRecentFiles.LoadMRU;
 
   {$IFDEF DEBUGSVR}
+  btnTest := TfpgButton.Create(Toolbar);
+  with btnTest do
+  begin
+    Name := 'btnTest';
+    SetPosition(168, 2, 80, 24);
+    Text := 'test';
+    Down := False;
+    FontDesc := '#Label1';
+    Hint := '';
+    ImageName := '';
+    TabOrder := 7;
+    OnClick := @miTest;
+  end;
+
   SendMethodExit('TMainForm.AfterCreate');
   {$ENDIF}
 end;

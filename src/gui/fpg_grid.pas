@@ -57,6 +57,7 @@ type
     property    HeaderFont;
   published
     property    Align;
+    property    BorderStyle;
     property    ColumnCount;
     property    Columns;
     property    FocusRow;
@@ -66,6 +67,7 @@ type
     property    RowCount;
     property    ScrollBarStyle;
     property    TabOrder;
+    property    TopRow;
     property    OnRowChange;
     property    OnDoubleClick;
     property    OnShowHint;
@@ -127,6 +129,7 @@ type
     property    Align;
     property    AlternateBGColor;
     property    BackgroundColor;
+    property    BorderStyle;
 //    property    ColResizing;
     property    ColumnCount;
     property    Columns;
@@ -154,10 +157,16 @@ type
     property    TopRow;
     property    VisibleRows;
     property    OnCanSelectCell;
-    property    OnDrawCell;
+    property    OnClick;
     property    OnDoubleClick;
+    property    OnDrawCell;
     property    OnFocusChange;
     property    OnKeyPress;
+    property    OnMouseDown;
+    property    OnMouseEnter;
+    property    OnMouseExit;
+    property    OnMouseMove;
+    property    OnMouseUp;
     property    OnRowChange;
     property    OnShowHint;
   end;
@@ -194,7 +203,7 @@ var
   e: TFileEntry;
   x: integer;
   y: integer;
-  s: string;
+  s: Tfpgstring;
   img: TfpgImage;
 begin
   e := FFileList.Entry[ARow];
@@ -232,7 +241,7 @@ begin
           if e.EntryType = etDir then
             s := ''
           else
-            s := FormatFloat('###,###,###,##0', e.Size);
+            s := FormatFloat('### ### ### ##0', e.Size);
           x := ARect.Right - Font.TextWidth(s) - 1;
           if x < (ARect.Left + 2) then
             x := ARect.Left + 2;

@@ -198,7 +198,9 @@ ProfileEvent('DEBUG:  ApplyStyleTag >>>');
         Style.FontAttributes := GetFPGuiFontAttributes(ASettings.Heading3Font);
       end;
 
-    ttHeadingOff:
+    ttHeading1Off,
+    ttHeading2Off,
+    ttHeading3Off:
       begin
         Style.FontNameSize := Copy(ASettings.NormalFont.FontDesc, 1, Pos(':', ASettings.NormalFont.FontDesc)-1);
         Style.FontAttributes := GetFPGuiFontAttributes(ASettings.NormalFont);
@@ -209,7 +211,8 @@ ProfileEvent('DEBUG:  ApplyStyleTag >>>');
         tmpFontParts := TStringList.Create;
         StrExtractStringsQuoted(tmpFontParts, Tag.Arguments);
         FontFaceName := tmpFontParts[0];
-        FontSizeString := tmpFontParts[1];
+        if tmpFontParts.Count=2 then
+          FontSizeString := tmpFontParts[1];
         tmpFontParts.Free;
 
         NewStyle := Style;
@@ -222,9 +225,11 @@ ProfileEvent('DEBUG:  ApplyStyleTag >>>');
           XSizeStr := tmpFontParts[0];
           YSizeStr := tmpFontParts[1];
           tmpFontParts.Destroy;
+          // This probably needs to be enhanced to extract the font name and size first.
           NewStyle.FontNameSize := NewStyle.FontNameSize + '-' + YSizeStr;
         end
-        else
+        else if (FontSizeString<>'') then
+          // Same here
           NewStyle.FontNameSize := NewStyle.FontNameSize + '-' + FontSizeString;
 
         if ( NewStyle.FontNameSize <> '' ) then
@@ -242,7 +247,11 @@ ProfileEvent('DEBUG:  ApplyStyleTag >>>');
     ttColor:
       GetTagColor( Tag.Arguments, Style.Color );
 
-    ttColorOff:
+    ttColorOff,
+    ttRedOff,
+    ttGreenOff,
+    ttBlackOff,
+    ttBlueOff:
       Style.Color := ASettings.FDefaultColor;
 
     ttBackgroundColor:
@@ -266,8 +275,11 @@ ProfileEvent('DEBUG:  ApplyStyleTag >>>');
     ttAlign:
       Style.Alignment := GetTagTextAlignment( Tag.Arguments, ASettings.FDefaultAlignment );
 
-    ttWrap:
-      Style.Wrap := GetTagTextWrap( Tag.Arguments );
+    ttNoWrap:
+      Style.Wrap := False;
+
+    ttNoWrapOff:
+      Style.Wrap := True;
 
     ttSetLeftMargin,
     ttSetRightMargin:
@@ -329,8 +341,7 @@ end;
 function GetDefaultStyle( const ASettings: TRichTextSettings ): TTextDrawStyle;
 begin
   FillChar(Result, SizeOf(TTextDrawStyle), 0);
-  { Note: this references the user Settings and not the parameter ASettings }
-  Result.FontNameSize := Settings.NormalFontDesc;
+  Result.FontNameSize := ASettings.NormalFont.FontDesc;
   Result.FontAttributes := [];
   Result.Alignment := ASettings.FDefaultAlignment;
   Result.Wrap := ASettings.FDefaultWrap;
@@ -352,7 +363,7 @@ begin
   FHeading3Font := fpgGetFont(DefaultTopicFontName + '-10:bold');
 
   FDefaultColor := clBlack;
-  FDefaultBackgroundColor := clWhite;
+  FDefaultBackgroundColor := clBoxColor;
 
   FDefaultAlignment := taLeft;
   FDefaultWrap := true;
@@ -462,7 +473,11 @@ begin
     NewFont := fpgApplication.DefaultFont;
 
   if FontSame( NewFont, AFont ) then
-    exit; // no change
+  begin
+    if AFont <> NewFont then { they are not the same instance }
+      NewFont.Free;
+    Exit; // no change needed
+  end;
 
   AFont.Free;
   AFont := NewFont;

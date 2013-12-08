@@ -34,7 +34,7 @@ type
   TPanelShape = (bsBox, bsFrame, bsTopLine, bsBottomLine, bsLeftLine,
     bsRightLine, bsSpacer, bsVerDivider);
 
-  TPanelStyle = (bsLowered, bsRaised);
+  TPanelStyle = (bsLowered, bsRaised, bsFlat);
 
   TPanelBorder = (bsSingle, bsDouble);
 
@@ -72,6 +72,8 @@ type
     procedure   DrawVerDivider; //  bsVerDivider
   protected
     procedure   HandlePaint; override;
+  public
+    constructor Create(AOwner: TComponent); override;
   published
     property    AcceptDrops;
     property    Align;
@@ -100,6 +102,7 @@ type
     property    OnDragStartDetected;
     property    OnMouseDown;
     property    OnMouseMove;
+    property    OnMouseScroll;
     property    OnMouseUp;
     property    OnPaint;
     property    OnShowHint;
@@ -134,6 +137,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
+    function    GetClientRect: TfpgRect; override;
     property    Font: TfpgFont read FFont;
   published
     property    AcceptDrops;
@@ -168,6 +172,10 @@ type
     property    OnDragEnter;
     property    OnDragLeave;
     property    OnDragStartDetected;
+    property    OnMouseDown;
+    property    OnMouseMove;
+    property    OnMouseScroll;
+    property    OnMouseUp;
     property    OnPaint;
     property    OnShowHint;
   end;
@@ -223,6 +231,10 @@ type
     property    OnDragEnter;
     property    OnDragLeave;
     property    OnDragStartDetected;
+    property    OnMouseDown;
+    property    OnMouseMove;
+    property    OnMouseScroll;
+    property    OnMouseUp;
     property    OnPaint;
     property    OnShowHint;
   end;
@@ -232,11 +244,18 @@ type
     "forms" inside other forms. You should also be able to design such
     frames with the UI designer too. }
   TfpgFrame = class(TfpgAbstractPanel)
+  private
+    FOnClose: TNotifyEvent;
+    FOnShow: TNotifyEvent;
+    FOnCreate: TNotifyEvent;
   protected
     WindowTitle: TfpgString;
+    procedure   HandleShow; override;
   public
     procedure   AfterConstruction; override;
     procedure   AfterCreate; virtual;
+    procedure   Close;
+    procedure   Show;
   published
     property    AcceptDrops;
     property    Align;
@@ -262,14 +281,36 @@ type
     property    OnDragEnter;
     property    OnDragLeave;
     property    OnDragStartDetected;
+    property    OnClose: TNotifyEvent read FOnClose write FOnClose;
+    property    OnCreate: TNotifyEvent read FOnCreate write FOnCreate;
     property    OnMouseDown;
     property    OnMouseMove;
     property    OnMouseUp;
     property    OnPaint;
+    property    OnShow: TNotifyEvent read FOnShow write FOnShow;
     property    OnShowHint;
   end;
 
   TfpgFrameClass = class of TfpgFrame;
+
+
+  TfpgImagePanel = class(TfpgWidget)
+  private
+    FImage: TfpgImage;
+    FOwnsImage: Boolean;
+    FScaleImage: Boolean;
+    procedure   SetImage(const AValue: TfpgImage);
+    procedure   SetScaleImage(const AValue: Boolean);
+  protected
+    procedure   HandlePaint; override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
+    property    Image: TfpgImage read FImage write SetImage;
+    property    OwnsImage: Boolean read FOwnsImage write FOwnsImage;
+    property    ScaleImage: Boolean read FScaleImage write SetScaleImage;
+  end;
+
 
 
 function CreateBevel(AOwner: TComponent; ALeft, ATop, AWidth, AHeight: TfpgCoord; AShape: TPanelShape;
@@ -330,10 +371,20 @@ end;
 
 { TfpgFrame }
 
+procedure TfpgFrame.HandleShow;
+begin
+  inherited HandleShow;
+  HandleAlignments(0, 0);
+  if Assigned(FOnShow) then
+    FOnShow(self);
+end;
+
 procedure TfpgFrame.AfterConstruction;
 begin
-  inherited AfterConstruction;
   AfterCreate;
+  inherited AfterConstruction;
+  if Assigned(FOnCreate) then
+    FOnCreate(self);
 end;
 
 procedure TfpgFrame.AfterCreate;
@@ -341,6 +392,17 @@ begin
   // do nothing here
 end;
 
+procedure TfpgFrame.Close;
+begin
+  HandleHide;
+  if Assigned(FOnClose) then
+    FOnClose(self);
+end;
+
+procedure TfpgFrame.Show;
+begin
+  HandleShow;
+end;
 
 {TfpgAbstractPanel}
 
@@ -566,6 +628,12 @@ begin
   end;
 end;
 
+constructor TfpgBevel.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FPanelShape := bsBox;
+end;
+
 {TfpgPanel}
 
 function TfpgPanel.GetAlignment: TAlignment;
@@ -663,43 +731,44 @@ begin
     Repaint;
   end;
 end;
+
 procedure TfpgPanel.HandlePaint;
 var
   lTxtFlags: TfpgTextFlags;
 begin
   inherited HandlePaint;
 
-  //  Canvas.SetLineStyle(2, lsSolid);
-  //  Canvas.SetColor(clWindowBackground);
-  //  Canvas.DrawRectangle(1, 1, Width - 1, Height - 1);
-  if FPanelBorder = bsSingle then
-    Canvas.SetLineStyle(1, lsSolid)
-  else
-    Canvas.SetLineStyle(2, lsSolid);
-
-  if Style = bsRaised then
-    Canvas.SetColor(clHilite2)
-  else
-    Canvas.SetColor(clShadow1);
-
-  if FPanelBorder = bsSingle then
+  if Style <> bsFlat then
   begin
-    Canvas.DrawLine(0, 0, Width - 1, 0);
-    Canvas.DrawLine(0, 1, 0, Height - 1);
-  end
-  else
-  begin
-    Canvas.DrawLine(0, 1, Width - 1, 1);
-    Canvas.DrawLine(1, 1, 1, Height - 1);
+    if FPanelBorder = bsSingle then
+      Canvas.SetLineStyle(1, lsSolid)
+    else
+      Canvas.SetLineStyle(2, lsSolid);
+
+    if Style = bsRaised then
+      Canvas.SetColor(clHilite2)
+    else
+      Canvas.SetColor(clShadow1);
+
+    if FPanelBorder = bsSingle then
+    begin
+      Canvas.DrawLine(0, 0, Width - 1, 0);
+      Canvas.DrawLine(0, 1, 0, Height - 1);
+    end
+    else
+    begin
+      Canvas.DrawLine(0, 1, Width - 1, 1);
+      Canvas.DrawLine(1, 1, 1, Height - 1);
+    end;
+
+    if Style = bsRaised then
+      Canvas.SetColor(clShadow1)
+    else
+      Canvas.SetColor(clHilite2);
+
+    Canvas.DrawLine(Width - 1, 0, Width - 1, Height - 1);
+    Canvas.DrawLine(0, Height - 1, Width, Height - 1);
   end;
-
-  if Style = bsRaised then
-    Canvas.SetColor(clShadow1)
-  else
-    Canvas.SetColor(clHilite2);
-
-  Canvas.DrawLine(Width - 1, 0, Width - 1, Height - 1);
-  Canvas.DrawLine(0, Height - 1, Width, Height - 1);
 
   Canvas.SetTextColor(FTextColor);
   Canvas.SetFont(Font);
@@ -710,6 +779,7 @@ begin
 
   if FWrapText then
     Include(lTxtFlags, txtWrap);
+
   case FAlignment of
     taLeftJustify:
       Include(lTxtFlags, txtLeft);
@@ -717,7 +787,8 @@ begin
       Include(lTxtFlags, txtRight);
     taCenter:
       Include(lTxtFlags, txtHCenter);
-    end;
+  end;
+
   case FLayout of
     tlTop:
       Include(lTxtFlags, txtTop);
@@ -725,7 +796,8 @@ begin
       Include(lTxtFlags, txtBottom);
     tlCenter:
       Include(lTxtFlags, txtVCenter);
-    end;
+  end;
+
   Canvas.DrawText(FMargin, FMargin, Width - FMargin * 2, Height - FMargin * 2, FText, lTxtFlags, FLineSpace);
 end;
 
@@ -749,6 +821,14 @@ begin
   FText := '';
   FFont.Free;
   inherited Destroy;
+end;
+
+function TfpgPanel.GetClientRect: TfpgRect;
+begin
+  if Style = bsFlat then
+    Result.SetRect(0, 0, Width, Height)
+  else
+    Result := inherited GetClientRect;
 end;
 
 {TfpgGroupBox}
@@ -986,6 +1066,59 @@ begin
   FFont.Free;
   inherited Destroy;
 end;
+
+{ TfpgImagePanel }
+
+procedure TfpgImagePanel.SetImage(const AValue: TfpgImage);
+begin
+  if FOwnsImage and Assigned(FImage) then
+    FImage.Free;
+  FImage := AValue;
+  Repaint;
+end;
+
+procedure TfpgImagePanel.SetScaleImage(const AValue: Boolean);
+begin
+  if FScaleImage = AValue then
+    Exit;
+  FScaleImage := AValue;
+  if Assigned(FImage) then
+    Repaint;
+end;
+
+procedure TfpgImagePanel.HandlePaint;
+var
+  x: integer;
+  y: integer;
+begin
+  inherited HandlePaint;
+  Canvas.Clear(BackgroundColor);
+  if Assigned(FImage) then
+  begin
+    x := (Width - FImage.Width) div 2;
+    y := (Height - FImage.Height) div 2;
+    if ScaleImage then
+      Canvas.StretchDraw(0, 0, Width, Height, FImage)
+    else
+      Canvas.DrawImage(x, y, FImage);
+  end;
+end;
+
+constructor TfpgImagePanel.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FImage := nil;
+  FOwnsImage := False;
+end;
+
+destructor TfpgImagePanel.Destroy;
+begin
+  if FOwnsImage then
+    FImage.Free;
+  inherited Destroy;
+end;
+
+
 
 end.
 

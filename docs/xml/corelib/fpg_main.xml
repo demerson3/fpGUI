@@ -79,6 +79,40 @@ planned.</p></descr>
 </seealso>
 </element>
 
+<element name="TfpgApplication">
+<short>A concrete class that encapsulates a fpGUI application</short>
+</element>
+
+<element name="TfpgApplication.InvokeHelp" link="#fpgui.fpg_base.TfpgApplicationBase.InvokeHelp">
+<short>fake</short>
+</element>
+
+<element name="TfpgApplication.HelpFile" link="#fpgui.fpg_base.TfpgApplicationBase.HelpFile">
+<short>fake</short>
+</element>
+
+
+<element name="TfpgTimer">
+<short>A timer component for fpGUI applications</short>
+<descr><printshort id="TfpgTimer"/>.</descr>
+</element>
+
+<element name="TfpgTimer.Create">
+<short>Use this method to create a timer component instance</short>
+<descr><printshort id="TfpgTimer.Create"/>. The AInterval parameter is a value in
+milliseconds. The timer will fire the OnTimer event every AInterval milliseconds or
+until the timer is disabled when the Enabled property is set to False.</descr>
+</element>
+
+<element name="TfpgTimer.Enabled" link="#fpgui.fpg_base.TfpgBaseTimer.Enabled">
+</element>
+
+
+<element name="TfpgWindow">
+<short>Encapsulates a top level or child window</short>
+<descr><printshort id="TfpgWindow"/>.</descr>
+</element>
+
     </module>
     <!-- fpg_main -->
   </package>

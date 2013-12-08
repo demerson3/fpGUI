@@ -231,7 +231,7 @@ implementation
 
 uses
   SysUtils
-  ,NewViewConstantsUnit
+  ,dvConstants
   ,nvUtilities
   ,ACLStringUtility
   ,SettingsUnit
@@ -815,7 +815,7 @@ begin
   end;
 
   // It's a URL. Insert link at start of URL
-  T := '<blue><link ' + PARAM_LINK_URL + ' "';
+  T := '<color blue><link ' + PARAM_LINK_URL + ' "';
   T := T + State.TextBlock;
   T := T + '">';
   Insert(T, Text, State.StartOfTextBlock);
@@ -859,6 +859,7 @@ var
   ProgramLink: string;
   ProgramPath: string;
   ProgramFilename: string;
+  lURL: string;
   ProgramInfo : TSerializableStringList;
   tmpProgramLinkParts : TStrings;
 
@@ -939,7 +940,7 @@ begin
       // then put code in to show it.
       if not TInternalHelpLink(Link).Automatic then
       begin
-        OutputString := '<blue>'
+        OutputString := '<color blue>'
                         + GetBeginLink( State.LinkIndex );
       end;
 
@@ -955,7 +956,7 @@ begin
         State.FootnoteLink := TFootnoteHelpLink(FootnoteLink);
       end;
 
-      OutputString := '<blue>' + GetBeginLink( State.LinkIndex );
+      OutputString := '<color blue>' + GetBeginLink( State.LinkIndex );
 
       inc( State.LinkIndex );
     end;
@@ -973,7 +974,7 @@ begin
         end;
       end;
 
-      OutputString := '<blue>' + GetBeginLink( State.LinkIndex );
+      OutputString := '<color blue>' + GetBeginLink( State.LinkIndex );
 
       inc( State.LinkIndex );
     end;
@@ -984,7 +985,7 @@ begin
       // :link reftype=hd refid=... database=<filename>
       ExternalLinkFileIndex := ( pData + 2 )^;
       ExternalLinkTopicID := StrNPas( pchar(pData + 4), (pData + 3)^ );
-      OutputString := '<blue><link ' + PARAM_LINK_EXTERNAL + ' '
+      OutputString := '<color blue><link ' + PARAM_LINK_EXTERNAL + ' '
                       + IntToStr( ExternalLinkFileIndex )
                       + ' '
                       + ExternalLinkTopicID
@@ -1000,6 +1001,7 @@ begin
       tmpProgramLinkParts := TStringList.Create;
       StrExtractStrings(tmpProgramLinkParts, ProgramLink, [' '], #0);
       ProgramPath := tmpProgramLinkParts[0];
+      lURL := tmpProgramLinkParts[1];
       tmpProgramLinkParts.Destroy;
 
       ProgramFilename := ExtractFilename( ProgramPath );
@@ -1010,8 +1012,8 @@ begin
          or StrStartsWithIgnoringCase(ProgramFilename, PRGM_FIREFOX)
          then
       begin
-        OutputString := '<blue><link ' + PARAM_LINK_URL + ' '
-                        + FullDoubleQuote( ProgramLink )
+        OutputString := '<color blue><link ' + PARAM_LINK_URL + ' '
+                        + FullDoubleQuote( lURL )
                         + '>';
       end
       else
@@ -1019,7 +1021,7 @@ begin
         ProgramInfo := TSerializableStringList.create;
         ProgramInfo.add(ProgramPath);
         ProgramInfo.add(ProgramLink);
-        OutputString := '<blue><link ' + PARAM_LINK_PROGRAM + ' '
+        OutputString := '<color blue><link ' + PARAM_LINK_PROGRAM + ' '
                         + ProgramInfo.getSerializedString
                         + '>';
         ProgramInfo.destroy;
@@ -1037,7 +1039,7 @@ begin
     begin
       State.FontState := fsFixed;
       State.InCharGraphics := true;
-      OutputString := RTF_NewLine + RTF_NewLine + '<tt><wrap no>';
+      OutputString := RTF_NewLine + RTF_NewLine + '<tt><nowrap>';
       State.Spacing := false;
       WordsOnLine := 0;
     end;
@@ -1046,7 +1048,7 @@ begin
     begin
       State.FontState := fsNormal;
       State.InCharGraphics := false;
-      OutputString := '</tt><wrap yes>';// + RTF_NewLine;
+      OutputString := '</nowrap></tt>';// + RTF_NewLine;
       State.Spacing := true;
     end;
 
@@ -1107,7 +1109,7 @@ begin
           State.Alignment := itaCenter;
         end;
       end;
-      OutputString := OutputString + '<wrap no>';
+      OutputString := OutputString + '<nowrap>';
       WordsOnLine := 0;
     end;
 
@@ -1115,7 +1117,7 @@ begin
     begin
       CheckForAutoURL( AText, State );
       // supposed to turn word wrap on, default font
-      OutputString := {'<align left>}'<wrap yes>'; // I guess...
+      OutputString := {'<align left>}'</nowrap>'; // I guess...
       State.Alignment := itaLeft;
     end;
 

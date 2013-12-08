@@ -97,14 +97,14 @@ const
   MWM_HINTS_DECORATIONS   = 1 shl 1;
   MWM_HINTS_INPUT_MODE    = 1 shl 2;
   MWM_HINTS_STATUS        = 1 shl 3;
-// bit definitions for MwmHints.functions */
+// bit definitions for MwmHints.functions
   MWM_FUNC_ALL            = 1 shl 0;
   MWM_FUNC_RESIZE         = 1 shl 1;
   MWM_FUNC_MOVE           = 1 shl 2;
   MWM_FUNC_MINIMIZE       = 1 shl 3;
   MWM_FUNC_MAXIMIZE       = 1 shl 4;
   MWM_FUNC_CLOSE          = 1 shl 5;
-// bit definitions for MwmHints.decorations */
+// bit definitions for MwmHints.decorations
   MWM_DECOR_ALL           = 1 shl 0;
   MWM_DECOR_BORDER        = 1 shl 1;
   MWM_DECOR_RESIZEH       = 1 shl 2;
@@ -112,12 +112,16 @@ const
   MWM_DECOR_MENU          = 1 shl 4;
   MWM_DECOR_MINIMIZE      = 1 shl 5;
   MWM_DECOR_MAXIMIZE      = 1 shl 6;
-// bit definitions for MwmHints.inputMode */
+// bit definitions for MwmHints.inputMode
   MWM_INPUT_MODELESS                  = 0;
   MWM_INPUT_PRIMARY_APPLICATION_MODAL = 1;
   MWM_INPUT_SYSTEM_MODAL              = 2;
   MWM_INPUT_FULL_APPLICATION_MODAL    = 3;
   PROP_MWM_HINTS_ELEMENTS             = 5;
+// System Tray message opcodes
+  SYSTEM_TRAY_REQUEST_DOCK   = 0;
+  SYSTEM_TRAY_BEGIN_MESSAGE  = 1;
+  SYSTEM_TRAY_CANCEL_MESSAGE = 2;
 
 type
   TXWindowStateFlag = (xwsfMapped);
@@ -153,12 +157,12 @@ type
   private
     FXimg: TXImage;
     FXimgmask: TXImage;
+  protected
     function    XImage: PXImage;
     function    XImageMask: PXImage;
-  protected
     procedure   DoFreeImage; override;
     procedure   DoInitImage(acolordepth, awidth, aheight: integer; aimgdata: Pointer); override;
-    procedure   DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer); override;
+    procedure   DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer); override;
   public
     constructor Create;
   end;
@@ -209,7 +213,7 @@ type
     procedure   DoDrawPolygon(Points: PPoint; NumPts: Integer; Winding: boolean=False); override;
     property    DCHandle: TfpgDCHandle read FDrawHandle;
   public
-    constructor Create; override;
+    constructor Create(awin: TfpgWindowBase); override;
     destructor  Destroy; override;
   end;
 
@@ -394,6 +398,23 @@ type
   end;
 
 
+  TfpgX11SystemTrayHandler = class(TfpgComponent)
+  private
+    FTrayIconParent: TWindow;
+    FTrayWidget: TfpgWindowBase;
+    function    GetTrayIconParent: TWindow;
+    function    GetSysTrayWindow: TWindow;
+    function    Send_Message(dest: TWindow; msg: longword; data1, data2, data3: longword): boolean;
+    property    TrayIconParent: TWindow read GetTrayIconParent;
+  public
+    constructor Create(AOwner: TComponent); override;
+    procedure   Show;
+    procedure   Hide;
+    function    IsSystemTrayAvailable: boolean;
+    function    SupportsMessages: boolean;
+  end;
+
+
 function fpgColorToX(col: TfpgColor): longword;
 
 
@@ -466,7 +487,7 @@ begin
   c := fpgColorToRGB(col);
 
   if xapplication.DisplayDepth >= 24 then
-    Result   := c
+    Result   := c and $FFFFFF       { No Alpha channel information }
   else if xapplication.DisplayDepth = 16 then
     Result   := ConvertTo565Pixel(c)
   else
@@ -1059,12 +1080,8 @@ var
   child: TWindow;
   prevchild: TWindow;
 
-  ret_root: TfpgWinHandle;
   ret_child: TfpgWinHandle;
-  root_x, root_y: integer;
-  child_x, child_y: integer;
 
-  s: string;
   i: integer;
   lTargetWinHandle: TWindow;
   w: TfpgX11Window;
@@ -1072,7 +1089,6 @@ var
   wg2: TfpgWidget;
   swg: TfpgWidget;
   msgp: TfpgMessageParams;
-  lDragEnterEvent: TfpgDragEnterEvent;
   lDropAction: TfpgDropAction;
   lAccept: Boolean;
   lMimeChoice: TfpgString;
@@ -1207,12 +1223,12 @@ begin
   if lAccept then
   begin
     Msg.xclient.data.l[1] := 1;
-    Msg.xclient.data.l[4]   := FActionType;
+    Msg.xclient.data.l[4] := FActionType;
   end
   else
   begin
     Msg.xclient.data.l[1] := 0;
-    Msg.xclient.data.l[4]   := None;
+    Msg.xclient.data.l[4] := None;
   end;
   Msg.xclient.data.l[2]   := 0;       // x & y co-ordinates
   Msg.xclient.data.l[3]   := 0;       // w & h co-ordinates
@@ -1740,31 +1756,50 @@ begin
           if not blockmsg then
           begin
             if (ev.xbutton.button >= 4) and (ev.xbutton.button <= 7) then  // mouse wheel
+            // 4=up, 5=down, 6=left, 7=right
             begin
               // generate scroll events:
               if ev._type = X.ButtonPress then
               begin
-                if ev.xbutton.button = Button4 then
+                if (ev.xbutton.button = Button4) or (ev.xbutton.button = 6) then // x.pp lacks Button6, Button7
                   i := -1
                 else
                   i := 1;
 
         	      // Check for other mouse wheel messages in the queue
-                while XCheckTypedWindowEvent(display, ev.xbutton.window, X.ButtonPress, @NewEvent) do
-                begin
-      	          if NewEvent.xbutton.Button = 4 then
-      	            Dec(i)
-                  else if NewEvent.xbutton.Button = 5 then
-      	            Inc(i)
-                  else
-            	    begin
-            	      XPutBackEvent(display, @NewEvent);
-                    break;
-            	    end;
-                end;
+                if ev.xbutton.button in [Button4,Button5] then
+                  while XCheckTypedWindowEvent(display, ev.xbutton.window, X.ButtonPress, @NewEvent) do
+                  begin
+      	            if NewEvent.xbutton.Button = 4 then
+      	              Dec(i)
+                    else if NewEvent.xbutton.Button = 5 then
+      	              Inc(i)
+                    else
+            	      begin
+            	        XPutBackEvent(display, @NewEvent);
+                      break;
+            	      end;
+                  end
+                else // button is 6 or 7
+                  while XCheckTypedWindowEvent(display, ev.xbutton.window, X.ButtonPress, @NewEvent) do
+                  begin
+    	              if NewEvent.xbutton.Button = 6 then
+    	                Dec(i)
+                    else if NewEvent.xbutton.Button = 7 then
+    	                Inc(i)
+                    else
+          	        begin
+          	          XPutBackEvent(display, @NewEvent);
+                      break;
+          	        end;
+                  end;
 
                 msgp.mouse.delta := i;
-                fpgPostMessage(nil, w, FPGM_SCROLL, msgp);
+
+                if ev.xbutton.button in [Button4,Button5] then
+                  fpgPostMessage(nil, w, FPGM_SCROLL, msgp)
+                else
+                  fpgPostMessage(nil, w, FPGM_HSCROLL, msgp);
               end;
             end
             else
@@ -2191,7 +2226,7 @@ begin
       xapplication.FLeaderWindow := XCreateSimpleWindow(xapplication.Display,
           XDefaultRootWindow(xapplication.Display), 0, 0, 1, 1, 0, 0, 0);
       SetWindowGroup(xapplication.FLeaderWindow);
-      xapplication.FClientLeaderAtom := XInternAtom(xapplication.Display, 'WM_CLIENT_LEADER', False);
+      xapplication.FClientLeaderAtom := XInternAtom(xapplication.Display, 'WM_CLIENT_LEADER', TBool(False));
     end;
   end;
 
@@ -2392,7 +2427,7 @@ begin
       AllocateWindowHandle;
     XMapWindow(xapplication.Display, FWinHandle);
     Include(FWinFlags, xwsfMapped);
-    // Fullscreen can only be set visible (mapped) windows.
+    // Fullscreen can only be set on visible (already mapped) windows.
     if waFullScreen in FWindowAttributes then
       fpgApplication.netlayer.WindowSetFullscreen(FWinHandle, True);
   end
@@ -2531,12 +2566,12 @@ begin
   begin
     if (actualformat = 32) and (count = 1) then
     begin
-      case data^.State of
-        Ord(wms_none):
+      case TWMStateType(data^.State) of
+        wms_none:
             begin
               // do nothing
             end;
-        Ord(wms_normal):
+        wms_normal:
             begin
               Result := wsNormal;
               maxh := false;
@@ -2551,11 +2586,11 @@ begin
               if (Result = wsNormal) and maxv and maxh then
                 Result := wsMaximized;
             end;
-        Ord(wms_withdrawn):
+        wms_withdrawn:
             begin
               // do nothing
             end;
-        Ord(wms_iconic):
+        wms_iconic:
             begin
               Result := wsMinimized;
             end;
@@ -2686,8 +2721,7 @@ end;
 
 function TfpgX11FontResource.GetHeight: integer;
 begin
-  // Do NOT use FFontData^.height as it isn't as accurate
-  Result := GetAscent + GetDescent;
+  Result := FFontData^.Height;
 end;
 
 function TfpgX11FontResource.GetTextWidth(const txt: string): integer;
@@ -2707,9 +2741,9 @@ end;
 
 { TfpgX11Canvas }
 
-constructor TfpgX11Canvas.Create;
+constructor TfpgX11Canvas.Create(awin: TfpgWindowBase);
 begin
-  inherited;
+  inherited Create(awin);
   FDrawing    := False;
   FDrawWindow := nil;
 
@@ -2787,7 +2821,7 @@ begin
       end;
       if FastDoubleBuffer then
       begin
-        // Rapid paint events reuse the double buffer which resests a delay
+        // Rapid paint events reuse the double buffer which resets a delay
         // After the delay the double buffer is freed, letting the OS use video
         // memory if needed.
         // Things like scrolling and resizing are fast
@@ -2942,7 +2976,8 @@ end;
 
 procedure TfpgX11Canvas.DoSetTextColor(cl: TfpgColor);
 begin
-  SetXftColor(cl, FColorTextXft);
+  { We use fpgColorToX() because we don't want Alpha channel information for X11 text }
+  SetXftColor(fpgColorToX(cl), FColorTextXft);
 end;
 
 procedure TfpgX11Canvas.DoSetColor(cl: TfpgColor);
@@ -3179,7 +3214,7 @@ begin
     xoffset        := 0;
     obdata         := #0;
     byte_order     := LSBFirst;
-    bitmap_bit_order := MSBFirst;
+    bitmap_bit_order := LSBFirst; //MSBFirst;
     bitmap_pad     := 32;
     bytes_per_line := 0;
 
@@ -3200,7 +3235,7 @@ begin
 
       // only truecolor 24/32 displays supported now, otherwise color conversion required!
       // this must be match for the display !!!
-      depth          := xapplication.DisplayDepth; //  acolordepth;
+      depth          := fpgApplication.DisplayDepth;
       bits_per_pixel := 32;
 
       // Shouldn't we rather get this from XDefaultVisualOfScreen(). PVisual?
@@ -3215,7 +3250,7 @@ begin
   XInitImage(@FXimg);
 end;
 
-procedure TfpgX11Image.DoInitImageMask(awidth, aheight: integer; aimgdata: Pointer);
+procedure TfpgX11Image.DoInitImageMask(awidth, aheight, amwidth: integer; aimgdata: Pointer);
 begin
   FMasked := True;
 
@@ -3406,8 +3441,6 @@ end;
 
 procedure TfpgX11Drag.Dragging(ev: TXEvent);
 var
-  dx, dy: cint;
-  child: TWindow;
   lTarget: TWindow;
 begin
   lTarget := FindWindow(ev.xmotion.root, ev.xmotion.x_root, ev.xmotion.y_root);
@@ -3443,8 +3476,7 @@ function TfpgX11Drag.IsDNDAware(win: TWindow): boolean;
 var
   actualtype: TAtom;
   actualformat: cint;
-  count, remaining, dummy: culong;
-  s: TfpgString;
+  count, remaining: culong;
   data: PChar;
   lversion: culong;
 begin
@@ -3497,8 +3529,6 @@ procedure TfpgX11Drag.SendDNDEnter(ATarget: TWindow);
 var
   xev: TXEvent;
   i, n: integer;
-  s: PChar;
-  sl: TStrings;
 begin
   xev.xany._type       := X.ClientMessage;
   xev.xany.display     := xapplication.Display;
@@ -3564,13 +3594,15 @@ var
 begin
   if FDropAccepted then
   begin
+    FillChar(xev, SizeOf(TXEvent), 0);
+
     xev.xany._type      := X.ClientMessage;
     xev.xany.display    := xapplication.Display;
     xev.xclient.window  := FLastTarget;
     xev.xclient.message_type := xapplication.XdndDrop;
     xev.xclient.format  := 32;
 
-    xev.xclient.data.l[0] := FSource.WinHandle;    // from;
+    xev.xclient.data.l[0] := FSource.WinHandle;    // from
     xev.xclient.data.l[1] := 0;                // reserved
     xev.xclient.data.l[2] := CurrentTime;       // timestamp
     xev.xclient.data.l[3] := 0;
@@ -3688,6 +3720,78 @@ begin
       SetTypeListProperty;
   end;
 end;
+
+{ TfpgX11SystemTrayHandler }
+
+function TfpgX11SystemTrayHandler.GetTrayIconParent: TWindow;
+begin
+  if FTrayIconParent = None then
+    FTrayIconParent := GetSysTrayWindow;
+  Result := FTrayIconParent;
+end;
+
+function TfpgX11SystemTrayHandler.GetSysTrayWindow: TWindow;
+var
+  buf: array[0..32] of char;
+  selection_atom: TAtom;
+begin
+  XGrabServer(xapplication.Display);
+
+  buf := PChar('_NET_SYSTEM_TRAY_S' + IntToStr(xapplication.DefaultScreen));
+  selection_atom := XInternAtom(xapplication.Display, buf, false);
+  Result := XGetSelectionOwner(xapplication.Display, selection_atom);
+
+  XUngrabServer(xapplication.Display);
+end;
+
+function TfpgX11SystemTrayHandler.Send_Message(dest: TWindow; msg: longword; data1, data2, data3: longword): boolean;
+var
+  ev: TXEvent;
+begin
+  FillChar(ev, SizeOf(TXEvent), 0);
+
+  ev.xclient._type := ClientMessage;
+  ev.xclient.window := dest;      { sender (tray icon window) }
+  ev.xclient.message_type := XInternAtom(xapplication.Display, '_NET_SYSTEM_TRAY_OPCODE', False );
+  ev.xclient.format := 32;
+
+  ev.xclient.data.l[0] := CurrentTime;
+  ev.xclient.data.l[1] := msg;    { message opcode }
+  ev.xclient.data.l[2] := data1;
+  ev.xclient.data.l[3] := data2;
+  ev.xclient.data.l[4] := data3;
+
+  Result := XSendEvent(xapplication.Display, TrayIconParent, False, NoEventMask, @ev) <> 0;
+  XSync(xapplication.Display, False);
+end;
+
+procedure TfpgX11SystemTrayHandler.Show;
+begin
+  Send_Message(TrayIconParent, SYSTEM_TRAY_REQUEST_DOCK, TfpgX11Window(Owner).WinHandle, 0, 0);
+end;
+
+procedure TfpgX11SystemTrayHandler.Hide;
+begin
+  TfpgX11Window(FTrayWidget).DoSetWindowVisible(False);
+end;
+
+constructor TfpgX11SystemTrayHandler.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FTrayWidget := AOwner as TfpgWindowBase;
+  FTrayIconParent := None;
+end;
+
+function TfpgX11SystemTrayHandler.IsSystemTrayAvailable: boolean;
+begin
+  Result := GetSysTrayWindow <> None;
+end;
+
+function TfpgX11SystemTrayHandler.SupportsMessages: boolean;
+begin
+  Result := True;
+end;
+
 
 initialization
   xapplication := nil;

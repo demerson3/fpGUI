@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2010 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -89,7 +89,7 @@ var
 begin
   if not Assigned(FInformativeText) then
     FInformativeText := TStringList.Create;
-    
+
   WrapText(AValue, FInformativeText, FFont, FMaxLineWidth, outw);
   // adjust dialog's height
   Height := lblName1.Bottom + (FLineHeight*FInformativeText.Count) + FTextY + 35;
@@ -157,13 +157,13 @@ var
   lleft: integer;
   sl: TStringList;
   lDefault: integer;
-  
+
   function GetButtonCount: integer;
   var
     i: TfpgMsgDlgBtn;
   begin
     Result := 0;
-    
+
     // try known sets first
     if Buttons = mbYesNoCancel then
     begin
@@ -180,7 +180,7 @@ var
       end;
       Exit; //==>
     end;
-    
+
     // if we got here, try all known buttons.
     for i := Low(TfpgMsgDlgBtn) to High(TfpgMsgDlgBtn) do
     begin
@@ -195,7 +195,7 @@ var
       end;
     end;
   end;
-  
+
 begin
   sl      := TStringList.Create;  // holds button captions
   lcount  := GetButtonCount;
@@ -214,7 +214,7 @@ begin
     lwidth  := lwidth + b.Width
   end;
   lwidth := lwidth + (cSpacing * (lcount-1));
-  
+
   // position buttons
   if Assigned(FInformativeText) then
     ltop := lblName1.Bottom + 50 + (FLineHeight*FInformativeText.Count) + 15
@@ -229,7 +229,7 @@ begin
     b.SetPosition(lleft, ltop, b.Width, b.Height);
     lleft := lleft + b.Width + cSpacing;
   end;
-  
+
   sl.Free;
 end;
 
@@ -320,7 +320,7 @@ var
   i: integer;
 begin
   inherited HandleShow;
-  
+
   for i := 0 to ComponentCount-1 do
     if Components[i] is TfpgButton then
       if TfpgButton(Components[i]).Default then
@@ -330,10 +330,18 @@ end;
 procedure TfpgMessageDialog.HandleKeyPress(var keycode: word;
   var shiftstate: TShiftState; var consumed: boolean);
 begin
-  if keycode = keyEscape then   // Esc cancels the dialog
-    ModalResult := mrCancel
+  case CheckClipBoardKey(keycode, shiftstate) of
+    ckCopy:
+        begin
+          fpgClipboard.Text := Text + LineEnding + LineEnding + InformativeText;
+          Consumed := True;
+        end;
   else
-    inherited HandleKeyPress(keycode, shiftstate, consumed);
+    if keycode = keyEscape then   // Esc cancels the dialog
+      ModalResult := mrCancel
+    else
+      inherited HandleKeyPress(keycode, shiftstate, consumed);
+  end;
 end;
 
 procedure TfpgMessageDialog.PrepareLayout;
@@ -390,7 +398,7 @@ begin
                            + 'Pascal Compiler''s RTL.'
                            + LineEnding + LineEnding
                            + 'fpGUI is an Object Pascal toolkit for cross-platform application development. '
-                           + 'It provides single-source portability across Linux, MS Windows, *BSD '
+                           + 'It provides single-source portability across Linux, MS Windows, FreeBSD, '
                            + 'OpenSolaris and embedded operating systems like Embedded Linux and Windows CE.'
                            + LineEnding + LineEnding
                            + 'For more information, see the ' + fpGUIName + ' website at: '
