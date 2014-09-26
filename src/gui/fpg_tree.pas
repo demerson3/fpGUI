@@ -66,8 +66,6 @@ type
   TfpgStateImageClickedEvent = procedure(Sender: TObject; ANode: TfpgTreeNode) of object;
 
 
-  { TfpgTreeNode }
-
   TfpgTreeNode = class(TObject)
   private
     FCollapsed: boolean;
@@ -86,7 +84,6 @@ type
     FText: TfpgString;
     FTextColor: TfpgColor;
     FHasChildren: Boolean;
-    FTree: TfpgTreeView;
     procedure   SetCollapsed(const AValue: boolean);
     procedure   SetInactSelColor(const AValue: TfpgColor);
     procedure   SetInactSelTextColor(const AValue: TfpgColor);
@@ -99,9 +96,11 @@ type
     procedure   SetHasChildren(const AValue: Boolean);
     procedure   DoTreeCheck(ANode: TfpgTreeNode);
     procedure   SetStateImageIndex(const AValue: integer);
+  protected
+    FTree: TfpgTreeView;
   public
-    constructor Create;
-    constructor Create (pass_tree : TfpgTreeView);
+    constructor Create; overload;
+    constructor Create(ATreeView: TfpgTreeView; AText: TfpgString); overload;
     destructor  Destroy; override;
     // node related
     function    AppendText(AText: TfpgString): TfpgTreeNode;
@@ -136,7 +135,7 @@ type
     property    Parent: TfpgTreeNode read FParent write SetParent;
     property    Prev: TfpgTreeNode read FPrev write FPrev;
     property    Text: TfpgString read FText write SetText;
-    property    MyTree: TfpgTreeView read FTree;
+    property    TreeView: TfpgTreeView read FTree;
     { determines the + or - image in the treeview }
     property    HasChildren: Boolean read FHasChildren write SetHasChildren;
     // color settings
@@ -277,10 +276,10 @@ type
 
 implementation
 
-{.$IFDEF DEBUG}
+{$IFDEF DEBUG}
 uses
-  dbugintf;
-{.$ENDIF}
+  fpg_dbugintf;
+{$ENDIF}
 
 type
   PColumnLeft = ^integer;
@@ -398,7 +397,8 @@ begin
   FData           := nil;
   FFirstSubNode   := nil;
   FLastSubNode    := nil;
-  FText           := '';
+  FText := '';
+  FTree := nil;
   FImageIndex     := -1;
   FStateImageIndex := -1;
   FCollapsed      := True;
@@ -415,10 +415,11 @@ begin
   FInactSelTextColor  := clUnset;
 end;
 
-constructor TfpgTreeNode.Create (pass_tree: TfpgTreeView);
+constructor TfpgTreeNode.Create(ATreeView: TfpgTreeView; AText: TfpgString);
 begin
   Create;
-  FTree := pass_tree;
+  FText := AText;
+  FTree := ATreeView;
 end;
 
 destructor TfpgTreeNode.Destroy;

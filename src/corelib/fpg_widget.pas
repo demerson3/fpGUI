@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2013 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -52,6 +52,7 @@ type
     FOnDragLeave: TNotifyEvent;
     FOnEnter: TNotifyEvent;
     FOnExit: TNotifyEvent;
+    FOnKeyChar: TfpgKeyCharEvent;
     FOnMouseDown: TMouseButtonEvent;
     FOnMouseEnter: TNotifyEvent;
     FOnMouseExit: TNotifyEvent;
@@ -151,6 +152,7 @@ type
     property    OnDoubleClick: TMouseButtonEvent read FOnDoubleClick write FOnDoubleClick;
     property    OnEnter: TNotifyEvent read FOnEnter write FOnEnter;
     property    OnExit: TNotifyEvent read FOnExit write FOnExit;
+    property    OnKeyChar: TfpgKeyCharEvent read FOnKeyChar write FOnKeyChar;
     property    OnKeyPress: TKeyPressEvent read FOnKeyPress write FOnKeyPress;
     property    OnMouseDown: TMouseButtonEvent read FOnMouseDown write FOnMouseDown;
     property    OnMouseEnter: TNotifyEvent read FOnMouseEnter write FOnMouseEnter;
@@ -167,6 +169,7 @@ type
     destructor  Destroy; override;
     procedure   AfterConstruction; override;
     function    InDesigner: boolean;
+    function    IsLoading: boolean;
     procedure   InvokeHelp; virtual;
     procedure   Realign;
     procedure   SetFocus;
@@ -436,6 +439,11 @@ end;
 function TfpgWidget.InDesigner: boolean;
 begin
   Result := (FFormDesigner <> nil)
+end;
+
+function TfpgWidget.IsLoading: boolean;
+begin
+  Result := csLoading in ComponentState;
 end;
 
 procedure TfpgWidget.InvokeHelp;
@@ -955,7 +963,8 @@ end;
 
 procedure TfpgWidget.HandleKeyChar(var AText: TfpgChar; var shiftstate: TShiftState; var consumed: boolean);
 begin
-  // descendants will implement this.
+  if FFocusable and Assigned(OnKeyChar) then
+    OnKeyChar(self, AText, consumed);
 end;
 
 procedure TfpgWidget.HandleKeyPress(var keycode: word; var shiftstate: TShiftState;
@@ -974,8 +983,11 @@ begin
 
   if not consumed and (keycode = fpgApplication.HelpKey) and (shiftstate=[]) then
   begin
-    InvokeHelp;
-    consumed := True;
+    if fpgApplication.HelpFile <> '' then
+    begin
+      InvokeHelp;
+      consumed := True;
+    end;
   end;
 
   case keycode of

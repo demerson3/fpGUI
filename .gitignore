@@ -3,6 +3,7 @@
 *.lps
 *.compiled
 *.bak*
+*.exe
 examples/gui/panel/panel_test
 examples/gui/splitter/splitter_test
 examples/gui/stdimages/stdimglist
