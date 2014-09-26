@@ -72,8 +72,6 @@ type
     FHScrollBar: TfpgScrollBar;
     FVScrollBar: TfpgScrollBar;
     FScrollBarStyle: TfpgScrollStyle;
-    function GetVisibleContentHeight: integer;
-    function GetVisibleContentWidth: integer;
     function    GetXOffset: integer;
     function    GetYOffset: integer;
     procedure   SetXOffset(x: integer);
@@ -95,8 +93,6 @@ type
     procedure   AfterCreate; override;
     procedure   SetContentFrameType(AContentFrameType: TfpgASFrameClass);
     property    ContentFrame: TfpgAutoSizingFrame read FContentFrame write FContentFrame;
-    property VisibleContentHeight : integer read GetVisibleContentHeight;
-    property VisibleContentWidth : integer read GetVisibleContentWidth;
   end;
 
 
@@ -167,6 +163,8 @@ var
   this_need : integer;
   par : TfpgWidget;
 begin
+  if ComponentCount=0 then
+    Exit;
   max_w := 1;
   max_h := 1;
   for i := 0 to ComponentCount-1 do begin
@@ -196,16 +194,6 @@ end;
 function TfpgScrollFrame.GetXOffset: integer;
 begin
   result := -FContentFrame.Left;
-end;
-
-function TfpgScrollFrame.GetVisibleContentHeight: integer;
-begin
-  result := FVisibleArea.Height;
-end;
-
-function TfpgScrollFrame.GetVisibleContentWidth: integer;
-begin
-  result := FVisibleArea.Width;
 end;
 
 function TfpgScrollFrame.GetYOffset: integer;
