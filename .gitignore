@@ -4,11 +4,3 @@
 *.compiled
 *.bak*
 *.exe
-examples/gui/panel/panel_test
-examples/gui/splitter/splitter_test
-examples/gui/stdimages/stdimglist
-examples/gui/treeviewtest/t
-examples/gui/treeviewtest/t1
-examples/gui/treeviewtest/t2
-examples/gui/treeviewtest/t3
-examples/gui/treeviewtest/treeviewtest
