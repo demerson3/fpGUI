@@ -1150,9 +1150,14 @@ begin
   i := 0;
   while (ANode <> nil) and (ANode <> RootNode) do
   begin
+writeln (longword(anode));
     ANode := PrevVisualNode(ANode);
+    if i>100
+      then i := i;
     inc(i);
+    if i>500000 then raise exception.create ('GetAbsoluteNodeTop: infinite loop?');
   end;
+  writeln;
   result := (i - 1) * GetNodeHeight;
 end;
 
