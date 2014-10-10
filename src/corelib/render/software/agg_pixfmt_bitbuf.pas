@@ -57,10 +57,10 @@ const
   ibit0=255-bit0; ibit1=255-bit1; ibit2=255-bit2; ibit3=255-bit3;
   ibit4=255-bit4; ibit5=255-bit5; ibit6=255-bit6; ibit7=255-bit7;
 
-  bits : array[0..7] of byte =
-    (bit0,  bit1,  bit2,  bit3,  bit4,  bit5,  bit6,  bit7);
-  inv_bits : array[0..7] of byte =
-    (ibit0, ibit1, ibit2, ibit3, ibit4, ibit5, ibit6, ibit7);
+  //bits : array[0..7] of byte =
+  //  (bit0,  bit1,  bit2,  bit3,  bit4,  bit5,  bit6,  bit7);
+  //inv_bits : array[0..7] of byte =
+  //  (ibit0, ibit1, ibit2, ibit3, ibit4, ibit5, ibit6, ibit7);
 
   bytes : array [0..7,0..7] of byte =
     ((bit0, bit0 or bit1, bit0 or bit1 or bit2, bit0 or bit1 or bit2 or bit3,
@@ -200,13 +200,15 @@ function byte_diff_from_left_length (x, len : unsigned) : unsigned;
 // Get a byte with this bit set to 1, e.g. x=5, result = 00000100
 function focus_bit (x : longword) : byte; inline;
   begin
-    result := bits[x and 7];  // equivalent to x mod 8
+    //result := bits[x and 7];  // equivalent to x mod 8
+    result := 1 shl x;
   end;
 
 // Get a byte with this bit set to 0, e.g. x=5, result = 11111011
 function focus_inv_bit (x : longword) : byte; inline;
   begin
-    result := inv_bits[x and 7];  // equivalent to x mod 8
+    //result := inv_bits[x and 7];  // equivalent to x mod 8
+    result := (1 shl x) xor 255;
   end;
 
 // get a pointer to the byte that contains the wanted bit x,y

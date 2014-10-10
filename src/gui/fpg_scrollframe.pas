@@ -1,3 +1,21 @@
+{
+    fpGUI  -  Free Pascal GUI Toolkit
+
+    Copyright (C) 2006 - 2014 See the file AUTHORS.txt, included in this
+    distribution, for details of the copyright.
+
+    See the file COPYING.modifiedLGPL, included in this distribution,
+    for details about redistributing fpGUI.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Description:
+      Defines a scrollable frame widget.
+
+      This unit was originally written by David Emerson <dle3ab@angelbase.com>
+}
 unit fpg_scrollframe;
 
 {$mode objfpc}{$H+}
@@ -17,7 +35,6 @@ type
   
   TfpgScrollFrame = class;
 
-  { TfpgEmbeddingFrame }
 
   TfpgEmbeddingFrame = class (TfpgFrame)
   // The purpose of the EmbeddingFrame is to pass scroll events to the ParentScrollFrame
@@ -32,7 +49,6 @@ type
     property ParentScrollFrame : TfpgScrollFrame read FParentScrollFrame write FParentScrollFrame;
   end;
 
-  { TfpgAutoSizingFrame }
 
   TfpgAutoSizingFrame = class (TfpgEmbeddingFrame)
   private
@@ -48,40 +64,35 @@ type
 
   TfpgASFrameClass = class of TfpgAutoSizingFrame;
 
-  { TfpgScrollFrame }
 
-  TfpgScrollFrame = class (TfpgFrame)
+  TfpgScrollFrame = class(TfpgFrame)
   private
-    FContentFrame : TfpgAutoSizingFrame;
-    FVisibleArea : TfpgEmbeddingFrame;
-    FHScrollBar : TfpgScrollBar;
-    FVScrollBar : TfpgScrollBar;
-    FScrollBarStyle : TfpgScrollStyle;
-    function GetVisibleContentHeight: integer;
-    function GetVisibleContentWidth: integer;
-    function GetXOffset: integer;
-    function GetYOffset: integer;
-    procedure SetXOffset (x: integer);
-    procedure SetYOffset (y: integer);
+    FContentFrame: TfpgAutoSizingFrame;
+    FVisibleArea: TfpgEmbeddingFrame;
+    FHScrollBar: TfpgScrollBar;
+    FVScrollBar: TfpgScrollBar;
+    FScrollBarStyle: TfpgScrollStyle;
+    function    GetXOffset: integer;
+    function    GetYOffset: integer;
+    procedure   SetXOffset(x: integer);
+    procedure   SetYOffset(y: integer);
   protected
-    procedure HandleMouseScroll(x, y: integer; shiftstate: TShiftState;
-        delta: smallint); override;
-    procedure HandleMouseHorizScroll(x, y: integer; shiftstate: TShiftState; 
-        delta: smallint); override;
-    procedure HandleResize(awidth, aheight: TfpgCoord); override;
-    procedure HandleShow; override;
-    procedure HScrollBarMove(Sender: TObject; position: integer);
-    procedure VScrollBarMove(Sender: TObject; position: integer);
-    procedure UpdateScrollbars; virtual;
-    property XOffset : integer read GetXOffset write SetXOffset; // these do not...
-    property YOffset : integer read GetYOffset write SetYOffset; // ...updatewindowposition
+    procedure   HandleMouseScroll(x, y: integer; shiftstate: TShiftState; delta: smallint); override;
+    procedure   HandleMouseHorizScroll(x, y: integer; shiftstate: TShiftState; delta: smallint); override;
+    procedure   HandleResize(awidth, aheight: TfpgCoord); override;
+    procedure   HandleShow; override;
+    procedure   HandlePaint; override;
+    procedure   HScrollBarMove(Sender: TObject; position: integer);
+    procedure   VScrollBarMove(Sender: TObject; position: integer);
+    procedure   UpdateScrollbars; virtual;
+    property    XOffset: integer read GetXOffset write SetXOffset; // these do not...
+    property    YOffset: integer read GetYOffset write SetYOffset; // ...updatewindowposition
   public
     constructor Create (AOwner: TComponent); override;
     constructor Create (AOwner: TComponent; ContentFrameType: TfpgASFrameClass); virtual;
-    procedure AfterCreate; override;
-    property ContentFrame : TfpgAutoSizingFrame read FContentFrame write FContentFrame;
-    property VisibleContentHeight : integer read GetVisibleContentHeight;
-    property VisibleContentWidth : integer read GetVisibleContentWidth;
+    procedure   AfterCreate; override;
+    procedure   SetContentFrameType(AContentFrameType: TfpgASFrameClass);
+    property    ContentFrame: TfpgAutoSizingFrame read FContentFrame write FContentFrame;
   end;
 
 
@@ -152,6 +163,8 @@ var
   this_need : integer;
   par : TfpgWidget;
 begin
+  if ComponentCount=0 then
+    Exit;
   max_w := 1;
   max_h := 1;
   for i := 0 to ComponentCount-1 do begin
@@ -181,16 +194,6 @@ end;
 function TfpgScrollFrame.GetXOffset: integer;
 begin
   result := -FContentFrame.Left;
-end;
-
-function TfpgScrollFrame.GetVisibleContentHeight: integer;
-begin
-  result := FVisibleArea.Height;
-end;
-
-function TfpgScrollFrame.GetVisibleContentWidth: integer;
-begin
-  result := FVisibleArea.Width;
 end;
 
 function TfpgScrollFrame.GetYOffset: integer;
@@ -261,6 +264,28 @@ begin
   if (csLoading in ComponentState) then
     Exit;
   UpdateScrollBars;
+end;
+
+procedure TfpgScrollFrame.HandlePaint;
+begin
+  if csDesigning in ComponentState then
+  begin
+    // clear background rectangle
+    Canvas.Clear(clDarkGray);
+    // When designing, don't draw colors
+    // but draw an outline
+    Canvas.SetLineStyle(1, lsDash);
+    Canvas.DrawRectangle(GetClientRect);
+    Canvas.SetLineStyle(1, lsSolid);
+    Canvas.Color := clUIDesignerGreen;
+    Canvas.DrawLine(0, 0, Width, Height);
+    Canvas.DrawLine(Width, 0, 0, Height);
+    Canvas.TextColor := clShadow1;
+    Canvas.DrawText(5, 5, Name + ': ' + ClassName);
+    Exit;  //==>
+  end;
+
+  inherited HandlePaint;
 end;
 
 procedure TfpgScrollFrame.HScrollBarMove (Sender: TObject; position: integer);
@@ -490,6 +515,15 @@ begin
     end;
 
   FScrollBarStyle := ssAutoBoth;
+end;
+
+procedure TfpgScrollFrame.SetContentFrameType(AContentFrameType: TfpgASFrameClass);
+begin
+  if Assigned(FContentFrame) then
+    FContentFrame.Free;
+  FContentFrame := AContentFrameType.Create(FVisibleArea);
+  FContentFrame.HandleMove(0, 0);
+  FContentFrame.ParentScrollFrame := self;
 end;
 
 

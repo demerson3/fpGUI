@@ -289,7 +289,7 @@ begin
     Name := 'tree';
     SetPosition(8, 8, 284, 267);
     Anchors := [anLeft,anTop,anBottom];
-    FontDesc := 'Georgia-12';
+    FontDesc := '#Label1';
     Hint := '';
     ScrollWheelDelta := 30;
     ShowImages := True;

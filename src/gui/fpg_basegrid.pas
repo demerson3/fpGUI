@@ -1,7 +1,7 @@
 {
     fpGUI  -  Free Pascal GUI Toolkit
 
-    Copyright (C) 2006 - 2012 See the file AUTHORS.txt, included in this
+    Copyright (C) 2006 - 2014 See the file AUTHORS.txt, included in this
     distribution, for details of the copyright.
 
     See the file COPYING.modifiedLGPL, included in this distribution,
@@ -40,6 +40,7 @@ type
   TfpgGridHeaderStyle = (ghsButton, ghsThin, ghsFlat);
 
   TfpgFocusChangeNotify = procedure(Sender: TObject; ARow, ACol: Integer) of object;
+  TfpgHeaderClick = procedure(Sender: TObject; ACol: Integer) of object;
   TfpgRowChangeNotify = procedure(Sender: TObject; ARow: Integer) of object;
   TfpgCanSelectCellEvent = procedure(Sender: TObject; const ARow, ACol: Integer; var ACanSelect: boolean) of object;
   TfpgDrawCellEvent = procedure(Sender: TObject; const ARow, ACol: Integer; const ARect: TfpgRect; const AFlags: TfpgGridDrawState; var ADefaultDrawing: boolean) of object;
@@ -51,14 +52,13 @@ type
   // Column 2 is special just for testing purposes. Descendant classes will
   // override that special behavior anyway.
   
-  { TfpgBaseGrid }
-
   TfpgBaseGrid = class(TfpgWidget)
   private
     FColResizing: boolean;
     FDragPos: integer;      // used for column resizing
     FHeaderStyle: TfpgGridHeaderStyle;
     FOnDrawCell: TfpgDrawCellEvent;
+    FOnHeaderClick: TfpgHeaderClick;
     FResizedCol: integer;   // used for column resizing
     FDefaultColWidth: integer;
     FDefaultRowHeight: integer;
@@ -73,7 +73,6 @@ type
     FFirstRow: Integer;
     FFirstCol: Integer;
     FXOffset: integer;  // used for go_SmoothScroll
-    FMargin: integer;
     FFont: TfpgFont;
     FHeaderFont: TfpgFont;
     FRowSelect: boolean;
@@ -91,6 +90,7 @@ type
     function    GetFontDesc: string;
     function    GetHeaderFontDesc: string;
     function    GetTotalColumnWidth: integer;
+    function    GetAdjustedBorderSizes: TRect;
     procedure   HScrollBarMove(Sender: TObject; position: integer);
     procedure   SetFontDesc(const AValue: string);
     procedure   SetHeaderFontDesc(const AValue: string);
@@ -106,8 +106,6 @@ type
     procedure   SetShowGrid(const AValue: boolean);
     procedure   SetShowHeader(const AValue: boolean);
     function    VisibleLines: Integer;
-    function    VisibleWidth: integer;
-    function    VisibleHeight: integer;
     procedure   SetFirstRow(const AValue: Integer);
     procedure   SetAlternativeBGColor(const AValue: TfpgColor);
     procedure   SetBorderStyle(AValue: TfpgEditBorderStyle);
@@ -171,6 +169,7 @@ type
     property    Options: TfpgGridOptions read FOptions write FOptions default [];
     property    OnDrawCell: TfpgDrawCellEvent read FOnDrawCell write FOnDrawCell;
     property    OnFocusChange: TfpgFocusChangeNotify read FOnFocusChange write FOnFocusChange;
+    property    OnHeaderClick: TfpgHeaderClick read FOnHeaderClick write FOnHeaderClick;
     property    OnRowChange: TfpgRowChangeNotify read FOnRowChange write FOnRowChange;
     property    OnCanSelectCell: TfpgCanSelectCellEvent read FOnCanSelectCell write FOnCanSelectCell;
   public
@@ -181,6 +180,9 @@ type
     procedure   BeginUpdate;
     procedure   EndUpdate;
     procedure   MouseToCell(X, Y: Integer; var ACol, ARow: Integer);
+    function    GetClientRect: TfpgRect; override;
+    function    VisibleWidth: integer;
+    function    VisibleHeight: integer;
   end;
 
 
@@ -229,6 +231,32 @@ begin
   Result := 0;
   for i := 0 to ColumnCount-1 do
     Result := Result + ColumnWidth[i];
+end;
+
+// Adjust theme borders based on BorderStyle property
+function TfpgBaseGrid.GetAdjustedBorderSizes: TRect;
+begin
+  Result := fpgStyle.GetControlFrameBorders;
+  case BorderStyle of
+    ebsNone:
+      begin
+        Result.Left := 0;
+        Result.Right := 0;
+        Result.Top := 0;
+        Result.Bottom := 0;
+      end;
+    ebsDefault:
+      begin
+        // do nothing - the theme values are correct
+      end;
+    ebsSingle:
+      begin
+        Result.Left := 1;
+        Result.Right := 1;
+        Result.Top := 1;
+        Result.Bottom := 1;
+      end;
+  end;
 end;
 
 procedure TfpgBaseGrid.SetFontDesc(const AValue: string);
@@ -533,7 +561,7 @@ begin
     hh := 0;
   if ShowHeader then
     hh := hh + FHeaderHeight+1;
-  Result := (Height - (2*FMargin) - hh) div FDefaultRowHeight;
+  Result := (GetClientRect.Height - hh) div FDefaultRowHeight;
 end;
 
 function TfpgBaseGrid.VisibleWidth: integer;
@@ -541,10 +569,10 @@ var
   sw: integer;
 begin
   if FVScrollBar.Visible then
-    sw := FVScrollBar.Width-1
+    sw := FVScrollBar.Width
   else
     sw := 0;
-  Result := Width - (FMargin*2) - sw;
+  Result := GetClientRect.Width - sw
 end;
 
 function TfpgBaseGrid.VisibleHeight: integer;
@@ -552,10 +580,10 @@ var
   sw: integer;
 begin
   if FHScrollBar.Visible then
-    sw := FHScrollBar.Height-1
+    sw := FHScrollBar.Height
   else
     sw := 0;
-  Result := Height - (FMargin*2) - sw;
+  Result := GetClientRect.Height - sw;
 end;
 
 procedure TfpgBaseGrid.SetFirstRow(const AValue: Integer);
@@ -597,6 +625,8 @@ var
   vmax: integer;
   Hfits, showH : boolean;
   Vfits, showV : boolean;
+  crect: TfpgRect;
+  borders: TRect;
 
   procedure hideScrollbar (sb : TfpgScrollBar);
   begin
@@ -622,8 +652,10 @@ var
     hh : integer; // header height
   begin
     hh := 0;
-    if ShowHeader then inc (hh, FHeaderHeight+1);
-    if showH then inc (hh, FHScrollBar.Height);
+    if ShowHeader then
+      inc (hh, FHeaderHeight+1);
+    if showH then
+      inc (hh, FHScrollBar.Height);
     vl := (VHeight - hh) div FDefaultRowHeight;
     Vfits := vl >= RowCount;
   end;
@@ -632,14 +664,16 @@ begin
   // if we don't want any scrollbars, hide them and exit
   if FScrollBarStyle = ssNone then
   begin
-    hideScrollbar (FHScrollBar);
-    hideScrollbar (FVScrollBar);
+    hideScrollbar(FHScrollBar);
+    hideScrollbar(FVScrollBar);
     exit;
   end;
-  
+
+  borders := GetAdjustedBorderSizes;
   // preliminary width/height calculations
-  VHeight := Height - 4;
-  HWidth  := Width - 4;
+  crect := GetClientRect;
+  VHeight := crect.Height;
+  HWidth  := crect.Width;
   cw := 0;
   for i := 0 to ColumnCount-1 do
     cw := cw + ColumnWidth[i];
@@ -704,20 +738,20 @@ begin
   if showV then
   begin
     FVScrollBar.Visible := true;
-    FVScrollBar.Min         := 0;
+    FVScrollBar.Min := 0;
     if RowCount > 0 then
       FVScrollBar.SliderSize := VisibleLines / RowCount
     else
       FVScrollBar.SliderSize := 0;
-    vmax := RowCount-VisibleLines;
-    if FFirstRow>vmax then
-      FFirstRow:=vmax;
-    FVScrollBar.Max         := vmax;
-    FVScrollBar.Position    := FFirstRow;
+    vmax := RowCount - VisibleLines;
+    if FFirstRow > vmax then
+      FFirstRow := vmax;
+    FVScrollBar.Max := vmax;
+    FVScrollBar.Position := FFirstRow;
     FVScrollBar.RepaintSlider;
-    FVScrollBar.Top     := 2;
-    FVScrollBar.Left    := Width - FVScrollBar.Width - 2;
-    FVScrollBar.Height  := VHeight;
+    FVScrollBar.Top := borders.Top;
+    FVScrollBar.Left := Width - FVScrollBar.Width - borders.Right;
+    FVScrollBar.Height := VHeight;
   end
   else
   begin
@@ -745,17 +779,17 @@ begin
     begin
       FHScrollBar.Max := ColumnCount-1;
       FHScrollBar.Position := FFirstCol;
-      FHScrollBar.SliderSize  := 1 / ColumnCount;
+      FHScrollBar.SliderSize := 1 / ColumnCount;
       FHScrollBar.PageSize := 1;
     end;
     FHScrollBar.RepaintSlider;
-    FHScrollBar.Top     := Height -FHScrollBar.Height - 2;
-    FHScrollBar.Left    := 2;
+    FHScrollBar.Top     := Height - FHScrollBar.Height - borders.Bottom;
+    FHScrollBar.Left    := borders.Left;
     FHScrollBar.Width   := HWidth;
   end
   else
   begin
-    FHScrollBar.Visible := false;
+    FHScrollBar.Visible := False;
     if Hfits then
     begin
       FFirstCol := 0;
@@ -785,9 +819,9 @@ var
   rTop: integer;
   firstcol, lastcol, firstrow, lastrow : integer;
   cWidths: array of integer;
+  rect: TRect;
 begin
   Canvas.ClearClipRect;
-
   r.SetRect(0, 0, Width, Height);
   case BorderStyle of
     ebsNone:
@@ -796,26 +830,23 @@ begin
         end;
     ebsDefault:
         begin
-          Canvas.DrawControlFrame(r);
-          InflateRect(r, -2, -2);
+          fpgStyle.DrawControlFrame(Canvas, r);
         end;
     ebsSingle:
         begin
           Canvas.SetColor(clShadow2);
           Canvas.DrawRectangle(r);
-          InflateRect(r, -1, -1);
         end;
   end;
-  Canvas.SetClipRect(r);
+  r := GetClientRect;
+  clipr := r;
+  Canvas.SetClipRect(clipr);
 
   Canvas.SetColor(FBackgroundColor);
   Canvas.FillRectangle(r);
 
-  clipr.SetRect(FMargin, FMargin, VisibleWidth, VisibleHeight);
-  r := clipr;
-
-  cLeft := FMargin; // column starting point
-  rTop := FMargin; // row starting point
+  cLeft := r.Left; // column starting point
+  rTop := r.Top; // row starting point
 
   if go_SmoothScroll in FOptions then
   begin
@@ -1241,6 +1272,7 @@ var
   colresize: boolean;
   cLeft: integer;
   c: integer;
+  borders: TRect;
 begin
   inherited HandleMouseMove(x, y, btnstate, shiftstate);
   
@@ -1264,8 +1296,9 @@ begin
   begin
     colresize := False;
     hh := FHeaderHeight;
+    borders := GetAdjustedBorderSizes;
 
-    cLeft := FMargin; // column starting point
+    cLeft := borders.Left; // column starting point
     if go_SmoothScroll in FOptions then
     begin
       if FHScrollBar.Visible then
@@ -1277,7 +1310,7 @@ begin
       c := FFirstCol;
     end;
 
-    if (y <= FMargin + hh) then // we are over the Header row
+    if (y <= (borders.Top + hh)) then // we are over the Header row
     begin
       cw := 0;
       for n := c to ColumnCount-1 do
@@ -1302,12 +1335,62 @@ begin
 end;
 
 procedure TfpgBaseGrid.HandleLMouseUp(x, y: integer; shiftstate: TShiftState);
+var
+  lColumn: integer;
+  hh: integer; { header height }
+  cLeft: integer; { column left }
+  c: integer;
+  n: integer;
+  cw: integer;
+  borders: TRect;
 begin
   inherited HandleLMouseUp(x, y, shiftstate);
 
+  if not FColResizing then
+  begin
+    if not ShowHeader then
+      Exit;
+    if (ColumnCount = 0) then
+      Exit; //==>
+    // searching for the appropriate character position
+    hh := FHeaderHeight;
+    borders := GetAdjustedBorderSizes;
+
+    if (y < (borders.Top+hh)) then  // inside Header row
+    begin
+      {$IFDEF DEBUG} Writeln('header click...'); {$ENDIF}
+
+      cLeft := borders.Left; // column starting point
+      if go_SmoothScroll in FOptions then
+      begin
+        if FHScrollBar.Visible then
+          Dec(cLeft, FHScrollBar.Position);
+        c := 0;
+      end
+      else
+      begin
+        c := FFirstCol;
+      end;
+
+      cw := 0;
+      for n := c to ColumnCount-1 do
+      begin
+        inc(cw, ColumnWidth[n]);
+        if x < (cLeft+cw+4) then
+        begin
+          if Assigned(FOnHeaderClick) then
+            FOnHeaderClick(self, n);
+          Break;
+        end;
+      end;  { for }
+    end;
+  end;  {if not FColResizing }
+
   {$IFDEF DEBUG}
   if FColResizing then
+  begin
     Writeln('Column ', FResizedCol,' width = ', ColumnWidth[FResizedCol]);
+  end;
   {$ENDIF}
 
   FColResizing  := False;
@@ -1324,6 +1407,7 @@ var
   pcol: Integer;
   c: integer;
   cLeft: integer;
+  borders: TRect;
 begin
   inherited HandleLMouseDown(x, y, shiftstate);
 
@@ -1332,18 +1416,19 @@ begin
 
   pcol := FFocusCol;
   prow := FFocusRow;
+  borders := GetAdjustedBorderSizes;
 
   // searching for the appropriate character position
   if ShowHeader then
-    hh := FHeaderHeight+1
+    hh := FHeaderHeight
   else
     hh := 0;
 
-  if ShowHeader and (y <= FMargin+hh) then  // inside Header row
+  if ShowHeader and (y < (borders.Top+hh)) then  // inside Header row
   begin
     {$IFDEF DEBUG} Writeln('header click...'); {$ENDIF}
 
-    cLeft := FMargin; // column starting point
+    cLeft := borders.Left; // column starting point
     if go_SmoothScroll in FOptions then
     begin
       if FHScrollBar.Visible then
@@ -1408,7 +1493,7 @@ begin
     else
       hh := 0;
 
-    if ShowHeader and (y > FMargin+hh) then  // not in Header row
+    if ShowHeader and (y > (fpgStyle.GetControlFrameBorders.Top + hh)) then  // not in Header row
     begin
       PopupMenu.ShowAt(self, x, y);
     end;
@@ -1450,7 +1535,7 @@ begin
     w := 0;
     for n := FFocusCol downto FFirstCol do
     begin
-      w := w + ColumnWidth[n]+1;
+      w := w + ColumnWidth[n];
       if w > VisibleWidth then
       begin
         if n = FFocusCol then
@@ -1471,6 +1556,8 @@ begin
 end;
 
 constructor TfpgBaseGrid.Create(AOwner: TComponent);
+var
+  borders: TRect;
 begin
   Updating;
   inherited Create(AOwner);
@@ -1483,7 +1570,6 @@ begin
   FPrevRow    := -1;
   FFirstRow   := 0;
   FFirstCol   := 0;
-  FMargin     := 2;
   FShowHeader := True;
   FShowGrid   := True;
   FRowSelect  := False;
@@ -1492,6 +1578,8 @@ begin
   FOptions    := [];
   FHeaderStyle := ghsButton;
   FBorderStyle := ebsDefault;
+
+  borders := GetAdjustedBorderSizes;
 
   FFont       := fpgGetFont('#Grid');
   FHeaderFont := fpgGetFont('#GridHeader');
@@ -1504,8 +1592,8 @@ begin
   FAlternativeBGColor := clHilite1;
   FColResizing      := False;
 
-  MinHeight   := HeaderHeight + DefaultRowHeight + FMargin;
-  MinWidth    := DefaultColWidth + FMargin;
+  MinHeight   := HeaderHeight + DefaultRowHeight + borders.Top + borders.Bottom;
+  MinWidth    := DefaultColWidth + borders.Left + borders.Right;
   
   FVScrollBar := TfpgScrollBar.Create(self);
   FVScrollBar.Orientation := orVertical;
@@ -1575,11 +1663,11 @@ begin
   else
     hh := 0;
 
-  ARow := FFirstRow + ((y - FMargin - hh) div FDefaultRowHeight);
+  ARow := FFirstRow + ((y - fpgStyle.GetControlFrameBorders.Top - hh) div FDefaultRowHeight);
   if ARow > RowCount-1 then
     ARow := RowCount-1;
 
-  cLeft := FMargin; // column starting point
+  cLeft := fpgStyle.GetControlFrameBorders.Left; // column starting point
   if go_SmoothScroll in FOptions then
   begin
     if FHScrollBar.Visible then
@@ -1600,6 +1688,19 @@ begin
       ACol := n;
       Break;
     end;
+  end;
+end;
+
+function TfpgBaseGrid.GetClientRect: TfpgRect;
+var
+  rect: TRect;
+begin
+  Result := inherited GetClientRect;
+  rect := fpgStyle.GetControlFrameBorders;
+  case BorderStyle of
+//    ebsNone:      // nothing to do
+    ebsDefault:   InflateRect(Result, -rect.Left, -rect.Top);  { assuming borders are even on opposite sides }
+    ebsSingle:    InflateRect(Result, -1, -1);
   end;
 end;
 
