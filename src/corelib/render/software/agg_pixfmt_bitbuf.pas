@@ -418,7 +418,7 @@ function bitbytes_from_1color_and_covers (c : aggclr_ptr; covers : int8u_ptr;
       //if bool_from_two_alphas (alpha, covers^) then write ('#') else write ('+');
       //if i and 7 = 7 then write (' ');
       if bool_from_two_alphas (alpha, covers^)
-        then p^ := p^ or focus_bit(i);
+        then p^ := p^ or focus_bit(i); // TODO ERROR runtime error here, why??
       inc (covers);
       if i and 7 = 7 then inc(p);
       end;
