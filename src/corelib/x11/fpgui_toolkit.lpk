@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <CONFIG>
   <Package Version="4">
     <Name Value="fpgui_toolkit"/>
@@ -29,7 +29,7 @@
     <Description Value="fpGUI Toolkit"/>
     <License Value="LGPL 2 with static linking exception."/>
     <Version Major="1" Minor="2"/>
-    <Files Count="107">
+    <Files Count="108">
       <Item1>
         <Filename Value="../stdimages.inc"/>
         <Type Value="Include"/>
@@ -458,6 +458,10 @@
         <Filename Value="../../gui/inputintegerdialog.inc"/>
         <Type Value="Include"/>
       </Item107>
+      <Item108>
+        <Filename Value="../render/software/agg_pixfmt_bitbuf.pas"/>
+        <UnitName Value="agg_pixfmt_bitbuf"/>
+      </Item108>
     </Files>
     <LazDoc Paths="../../../docs/xml/corelib;../../../docs/xml/corelib/x11;../../../docs/xml/corelib/gdi;../../../docs/xml/gui"/>
     <RequiredPkgs Count="1">

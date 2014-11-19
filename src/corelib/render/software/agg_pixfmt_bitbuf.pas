@@ -201,14 +201,14 @@ function byte_diff_from_left_length (x, len : unsigned) : unsigned;
 function focus_bit (x : longword) : byte; inline;
   begin
     //result := bits[x and 7];  // equivalent to x mod 8
-    result := 1 shl x;
+    result := 1 shl (x and 7);
   end;
 
 // Get a byte with this bit set to 0, e.g. x=5, result = 11111011
 function focus_inv_bit (x : longword) : byte; inline;
   begin
     //result := inv_bits[x and 7];  // equivalent to x mod 8
-    result := (1 shl x) xor 255;
+    result := (1 shl (x and 7)) xor 255;
   end;
 
 // get a pointer to the byte that contains the wanted bit x,y
@@ -418,7 +418,7 @@ function bitbytes_from_1color_and_covers (c : aggclr_ptr; covers : int8u_ptr;
       //if bool_from_two_alphas (alpha, covers^) then write ('#') else write ('+');
       //if i and 7 = 7 then write (' ');
       if bool_from_two_alphas (alpha, covers^)
-        then p^ := p^ or focus_bit(i); // TODO ERROR runtime error here, why??
+        then p^ := p^ or focus_bit(i);
       inc (covers);
       if i and 7 = 7 then inc(p);
       end;
